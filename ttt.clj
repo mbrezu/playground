@@ -1,5 +1,5 @@
 
-(ns ttt
+(ns playground.ttt
   (:use clojure.contrib.seq-utils))
 
 (def table [[:tic nil :tac]
@@ -8,6 +8,10 @@
 
 (def table2 [[:tac nil :tic]
              [nil :tic :tic]
+             [:tac :tac :tic]])
+
+(def table3 [[:tac :tac :tic]
+             [:tic :tic :tic]
              [:tac :tac :tic]])
 
 (defn all-same [row]
@@ -31,6 +35,9 @@
       (some all-same (transpose table))
       (-> table extract-diagonal all-same)
       (-> table horizontal-flip extract-diagonal all-same)))
+
+(defn full? [table]
+  (not (some nil? (apply concat table))))
 
 (defn generate-succs [table]
   (apply concat (for [[row-number row ] (indexed table)

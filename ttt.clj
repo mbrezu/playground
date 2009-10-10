@@ -16,8 +16,8 @@
              [:tac :tac :tic]])
 
 (def table4 [[nil nil nil]
-             [nil :tac nil]
-             [nil :tic nil]])
+             [nil nil nil]
+             [nil nil nil]])
 
 (defn all-same [row]
   (and (first row)
@@ -76,26 +76,33 @@
         (nil? value2) value1
         :else (min value1 value2)))
 
-(defn score-succ [table player]
+(defn alpha-beta [table player alpha beta]
   (let [win (win? table)]
     (if win
-      (cond (= win player) 1
-            :else -1)
+      (cond (= win player) [nil 1]
+            :else [nil -1])
       (if (full? table)
-        0
-        (let [alternatives (generate-succs table)
-              scores (map #(- (score-succ (:table %) (other-player player)))
-                          alternatives)]
-          (apply min scores))))))
+        [nil 0]
+        (loop [alternatives (generate-succs table)
+               iter-alpha alpha
+               best-moves (-> alternatives first :move)]
+          (let [current-move (-> alternatives first :move)]
+            (if (empty? alternatives)
+              [best-moves iter-alpha]
+              (let [[_ new-alpha-raw] (alpha-beta (-> alternatives first :table)
+                                                  (other-player player)
+                                                  (- beta)
+                                                  (- iter-alpha))
+                    new-alpha (- new-alpha-raw)]
+                (if (> new-alpha iter-alpha)
+                  (if (>= new-alpha beta)
+                    [current-move new-alpha]
+                    (recur (rest alternatives) new-alpha current-move))
+                  (recur (rest alternatives) iter-alpha best-moves))))))))))
 
 (defn choose-move [table player]
-  (let [succs (generate-succs table)
-        scores (pmap #(score-succ (:table %) player)
-                     succs)
-        max-score (apply max scores)
-        best-succs (remove nil? (map #(if (= %2 max-score) %1) succs scores))
-        best-succ (rand-elt best-succs)]
-    (:move best-succ)))
+  (let [[move score] (alpha-beta table player -1000 1000)]
+    move))
 
 (defn apply-move [table player move]
   (assoc-in table [(:row move) (:column move)] player))
@@ -103,13 +110,20 @@
 (defn empty-table []
   (vec (take 3 (repeat (vec (take 3 (repeat nil)))))))
 
+(defn tictac-xo [item]
+  (cond (= item nil) "."
+        (= item :tic) "X"
+        (= item :tac) "O"))
+
+(defn tictac-toggle [item]
+  (cond (= item :tic) :tac
+        (= item :tac) :tic))
+
 (defn render-table [table]
   (with-out-str
     (doseq [row table]
       (doseq [item row]
-        (cond (= item nil) (print ".")
-              (= item :tic) (print "X")
-              (= item :tac) (print "O")))
+        (print (tictac-xo item)))
       (println))))
 
 (defn move [[table player]]
@@ -121,9 +135,10 @@
 
 (defn print-game []
   (let [lazy-game (iterate move [table4 :tic])
-        game (map first (take-while identity lazy-game))]
+        game (take-while identity lazy-game)]
     (doseq [table game]
-      (println (render-table table)))))
+      (println (render-table (first table)))
+      (println (str "Next move: " (tictac-xo (second table)))))))
 
 (defn parse-table [str-table]
   (let [empty (empty-table)

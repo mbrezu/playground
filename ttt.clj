@@ -1,4 +1,24 @@
 
+;; A toy TicTacToe engine (plays perfectly though).
+;;
+;; Contains three different algorithms:
+;;
+;;  * plain minimax
+;;
+;;  * negamax with alpha-beta pruning (pseudo code taken from Wikipedia)
+;;
+;;  * minimax with alpha-beta pruning (an attempt to wrap my mind
+;;    around the Wikipedia pseudocode.
+;;
+;; to use, run (time (print-game table5))
+;; (or table4 or any table)
+;;
+;; WARNING: the plain minimax algorithm takes 20 minutes for an empty
+;; board.  The alpha-beta pruning variations take 10 seconds for a
+;; complete game. Guess that halving the exponent really works, even
+;; if I didn't bother to sort variations (that probably doesn't matter
+;; for a game as simple as TicTacToe).
+
 (ns playground.ttt
   (:use clojure.contrib.seq-utils)
   (:use clojure.contrib.pprint))
@@ -15,11 +35,11 @@
              [:tic :tic :tic]
              [:tac :tac :tic]])
 
-(def table4 [[:tac nil nil]
-             [nil :tic :tac]
-             [:tac :tac :tic]])
+(def table4 [[nil nil nil]
+             [:tic nil :tac]
+             [:tac nil :tic]])
 
-(def table5 [[nil nil nil]
+(def table5 [[:tac nil nil]
              [nil nil nil]
              [nil nil nil]])
 
@@ -96,34 +116,73 @@
                   (recur (rest alternatives) new-alpha current-move))
                 (recur (rest alternatives) iter-alpha best-moves)))))))))
 
-(defn minimax [table player orig-player depth]
-  (let [done (game-over table orig-player)]
+(defn minimax [table player orig-player]
+  (let [done (game-over table orig-player)
+        maximizing (= player orig-player)]
     (if done
       [nil done]
-      (if (= 0 depth)
-        [nil 0]
-        (let [alternatives (generate-succs table player)
-              scores (map second
-                          (map #(minimax (:table %)
-                                         (other-player player)
-                                         orig-player
-                                         (dec depth))
-                               alternatives))
-              scored-moves (map vector (map :move alternatives) scores)
-              best-score (apply (if (= player orig-player) max min) scores)
-              best-moves (map first (filter #(= (second %) best-score) scored-moves))
-              best-move (rand-elt best-moves)]
-          [best-move best-score])))))
+      (let [alternatives (generate-succs table player)
+            scores (map second
+                        (map #(minimax (:table %)
+                                       (other-player player)
+                                       orig-player)
+                             alternatives))
+            scored-moves (map vector (map :move alternatives) scores)
+            best-score (apply (if maximizing max min) scores)
+            best-moves (map first (filter #(= (second %) best-score) scored-moves))
+            best-move (rand-elt best-moves)]
+        [best-move best-score]))))
+
+(defn minimax-alpha-beta [table player orig-player alpha beta]
+  (let [done (game-over table orig-player)
+        maximizing (= player orig-player)]
+    (if done
+      [nil done]
+      (loop [alternatives (generate-succs table player)
+             iter-alpha alpha
+             iter-beta beta
+             best-move (-> alternatives first :move)]
+        (if (empty? alternatives)
+          (if maximizing
+            [best-move iter-alpha]
+            [best-move iter-beta])
+          (let [[_ score] (minimax-alpha-beta (-> alternatives first :table)
+                                              (other-player player)
+                                              orig-player
+                                              iter-alpha
+                                              iter-beta)
+                move (-> alternatives first :move)]
+            (if maximizing
+              (if (> score iter-beta)
+                [move score]
+                (recur (rest alternatives)
+                       (max score iter-alpha)
+                       iter-beta
+                       (if (> score iter-alpha)
+                         move
+                         best-move)))
+              (if (< score iter-alpha)
+                [move score]
+                (recur (rest alternatives)
+                       iter-alpha
+                       (min score iter-beta)
+                       (if (< score iter-beta)
+                         move
+                         best-move))))))))))
 
 (defn choose-move [table player]
 ;;   (let [[move score] (negamax-alpha-beta table
 ;;                                          player
 ;;                                          -1000
 ;;                                          1000)]
-  (let [[move score] (minimax table
-                              player
-                              player
-                              50)]
+;;   (let [[move score] (minimax table
+;;                               player
+;;                               player)]
+  (let [[move score] (minimax-alpha-beta table
+                                         player
+                                         player
+                                         -1000
+                                         1000)]
     move))
 
 (defn apply-move [table player move]

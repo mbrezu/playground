@@ -1,0 +1,53 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sicfdn.Parser", "Sicfdn.Parser\Sicfdn.Parser.csproj", "{A34ADEB9-A379-46BB-B419-09FDB5125423}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sicfdn.Cli", "Sicfdn.Cli\Sicfdn.Cli.csproj", "{CB51FACE-8E9F-4893-BEFB-2A63DF943279}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sicfdn.Test", "Sicfdn.Test\Sicfdn.Test.csproj", "{D2856DC4-DA00-4667-8302-E6A55EB541CC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{259A2EE7-84C3-4A53-AB1D-220884DCC209}"
+	ProjectSection(SolutionItems) = preProject
+		LocalTestRun.testrunconfig = LocalTestRun.testrunconfig
+		Sicfdn.vsmdi = Sicfdn.vsmdi
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sicfdn.Utils", "Sicfdn.Utils\Sicfdn.Utils.csproj", "{2CCC9C5E-CAC5-4554-B757-A53EA5EE1067}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sicfdn.Interpreter", "Sicfdn.Interpreter\Sicfdn.Interpreter.csproj", "{02E62855-4417-413E-80DB-A73B0F69A5E7}"
+EndProject
+Global
+	GlobalSection(TestCaseManagementSettings) = postSolution
+		CategoryFile = Sicfdn.vsmdi
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A34ADEB9-A379-46BB-B419-09FDB5125423}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A34ADEB9-A379-46BB-B419-09FDB5125423}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A34ADEB9-A379-46BB-B419-09FDB5125423}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A34ADEB9-A379-46BB-B419-09FDB5125423}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CB51FACE-8E9F-4893-BEFB-2A63DF943279}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CB51FACE-8E9F-4893-BEFB-2A63DF943279}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CB51FACE-8E9F-4893-BEFB-2A63DF943279}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CB51FACE-8E9F-4893-BEFB-2A63DF943279}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2856DC4-DA00-4667-8302-E6A55EB541CC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2856DC4-DA00-4667-8302-E6A55EB541CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2856DC4-DA00-4667-8302-E6A55EB541CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2856DC4-DA00-4667-8302-E6A55EB541CC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2CCC9C5E-CAC5-4554-B757-A53EA5EE1067}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2CCC9C5E-CAC5-4554-B757-A53EA5EE1067}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2CCC9C5E-CAC5-4554-B757-A53EA5EE1067}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2CCC9C5E-CAC5-4554-B757-A53EA5EE1067}.Release|Any CPU.Build.0 = Release|Any CPU
+		{02E62855-4417-413E-80DB-A73B0F69A5E7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{02E62855-4417-413E-80DB-A73B0F69A5E7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{02E62855-4417-413E-80DB-A73B0F69A5E7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{02E62855-4417-413E-80DB-A73B0F69A5E7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

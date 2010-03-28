@@ -1,0 +1,5 @@
+ink
+failed with error:"9"
+
+int f(]
+failed with error:"4"

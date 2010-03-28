@@ -1,0 +1,98 @@
+int var_1;
+var_1 is an int
+
+int *v;
+v is a pointer to int
+
+void f();
+f is a function with no arguments returning void
+
+int (*pf)();
+pf is a pointer to function with no arguments returning int
+
+int *pf();
+pf is a function with no arguments returning pointer to int
+
+int *pf()[];
+pf is a function with no arguments returning array of pointer to int
+
+int *v[3];
+v is an array of 3 pointer to int
+
+int (*v)[];
+v is a pointer to array of int
+
+int (*(*v))[][];
+v is a pointer to pointer to array of array of int
+
+int f(int i);
+f is a function with arguments (int) returning int
+
+int f(int i, int k, int (*pf)());
+f is a function with arguments (int, int, pointer to function with no arguments returning int) returning int
+
+int *(*(**foo [][8])())[];
+foo is an array of array of 8 pointer to pointer to function with no arguments returning pointer to array of pointer to int
+
+int
+anonymous variable is an int
+
+int *()
+anonymous variable is a function with no arguments returning pointer to int
+
+int (*)(int (*)(int, int)[])
+anonymous variable is a pointer to function with arguments (pointer to function with arguments (int, int) returning array of int) returning int
+
+int f(int (*)())
+f is a function with arguments (pointer to function with no arguments returning int) returning int
+
+struct { int i; struct { int j; } k; };
+anonymous variable is a struct with members (i is an int, k is a struct with members (j is an int))
+
+struct { int i; int *pi; int (*pfi)();} str;
+str is a struct with members (i is an int, pi is a pointer to int, pfi is a pointer to function with no arguments returning int)
+
+struct { int i; } *ps;
+ps is a pointer to struct with members (i is an int)
+
+int i, j, *pi;
+i is an int
+j is an int
+pi is a pointer to int
+
+int i, j, k[][3], (*pf)();
+i is an int
+j is an int
+k is an array of array of 3 int
+pf is a pointer to function with no arguments returning int
+
+struct str { int i, j; } s, *ps;
+s is a struct with members (i is an int, j is an int)
+ps is a pointer to struct with members (i is an int, j is an int)
+
+typedef int *pint[], intk;
+
+typedef int **ppint;
+
+typedef struct str2 { struct str v[3]; int k;} *pstr2;
+
+pint pk[30];
+pk is an array of 30 array of pointer to int
+
+int *pl[30][];
+pl is an array of 30 array of pointer to int
+
+int
+anonymous variable is an int
+
+Typedefs:
+intk is an int
+pint is an array of pointer to int
+ppint is a pointer to pointer to int
+pstr2 is a pointer to struct with members (v is an array of 3 struct with members (i is an int, j is an int), k is an int)
+Structs:
+str is a struct with members (i is an int, j is an int)
+str2 is a struct with members (v is an array of 3 struct with members (i is an int, j is an int), k is an int)
+
+
+

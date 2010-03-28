@@ -1,0 +1,72 @@
+
+Parsers are functions
+INPUTS - a stream of tokens
+OUTPUTS - a parse tree, and the remaining tokens.
+
+The parse tree is a map with several fields
+:tree - the actual tree
+:warnings - parsing warnings
+:errors - parsing errors
+:fatal error - the kind that stop the computation
+
+Under :tree there is a map with the following keys:
+:start - start position (inclusive)
+:end - end position (inclusive)
+:type - type of the node
+:subnodes - seq of sub-nodes
+:parser - the actual parser function used to parse the node
+
+There are several parser combinators
+(parse-enclosed resulting-tree-type parser-start parser-for-enclosed parser-end)
+(parse-list resulting-tree-type separator-parser parser-for-elements)
+(parse-binary-assoc-right resulting-tree-type [separator-parsers] parser-for-elements)
+(parse-binary-assoc-left resulting-tree-type [separator-parsers] parser-for-elements)
+(parse-alternative resulting-tree-type [list-of-parsers-to-try])
+(parse-sequence resulting-tree-type [list-of-parsers-to-apply])
+(parse-list-until resulting-tree-type parser-for-elements parser-for-end-marker)
+(parse-ignore-all-until parser-for-end-marker error-to-generate)
+
+And one primitive:
+(parse-token resulting-type validator-predicate)
+
+If resulting-type for any of the above is nil, then the resulting tree
+is thrown away (it is nil too and it is ignored in the subnodes list
+it is a part of).  If not nil, then it is used to build a tree with
+the underlying results as subnodes and the resulting-type as a type.
+
+The validator predicate will return a map of
+:warnings
+:errors
+:fatal-error
+
+Any values in the fatal-error key will propagate a stop in the
+parsing, except when they occur in the parse-alternative combinator
+and there are alternatives without fatal errors.
+
+When building larger trees, the lists of warnings and errors are
+concatenated.
+
+the tokens are maps consisting of
+:type
+:content
+:start
+:end
+
+The predefined validator-predicates are:
+(must-be required-token-type fatal-error)
+         - issues a fatal error if the token doesn't match
+(should-be recommended-token-type warnings)
+          - issues a warning if there is token doesn't match
+(really-should-be recommended-token-type error)
+          - issues an error if there is a token that doesn't match
+
+The fatal-error/warnings/error parameters can be strings, or functions
+that receive the expected token type and the actual token as arguments
+and return the error.
+
+In an parse-alternative, the first parse that doesn't return errors is
+chosen.  If there isn't any, the first that doesn't have errors (only
+warnings).  If there isn't any, then one with errors is chosen.  If
+there are only fatal-errors, then the first fatal error is chosen.
+
+Lexing

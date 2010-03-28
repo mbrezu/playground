@@ -1,0 +1,32 @@
+
+* Intermediate representation assembler
+** Instructions:
+1. Load src, dest
+   src can be immediate (#value) or from memory memory ([register])
+   dest can be a register
+2. Store src, dest
+   Reverse of Load for src and dest
+3. Add/Sub/Mul/Div op1, op2, dest
+   op1, op2, dest are registers
+4. BranchGreaterThan/BranchLessThan/BranchEqual/BranchNonEqual op1, op2, address
+   op1, op2 are registers
+   address can be immediate or register
+5. Call address
+   address can be immediate or register
+6. Return
+7. Push register
+   Pushes the value held in the register on the stack.
+8. Pop register
+   Pops from stack to register
+There's of course, an infinite number of registers available.
+** Runtime:
+
+
+* TODOs
+** DONE typedefs and named structs
+** DONE identifiers are lexed correctly (they can contain underscores, digits etc.)
+** DONE automatic testing (move the testcases and results in a file)
+** TODO parse expressions (arithmetic, pointer, array, struct fields)
+** TODO parse statements (assignment, for, if for now)
+** TODO parse functions and blocks
+* Articles to read

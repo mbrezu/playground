@@ -55,81 +55,104 @@ type ast =
   | ExprNumLiteral of string
       (* An identifier used in an expression. *)
   | ExprIdentifier of string
+      (* A sum expression. *)
+  | ExprBinaryOp of string * ast_with_pos * ast_with_pos
 and ast_with_pos = ast * pos
 
 exception ParseError of string * token list
 
-let parse tokens =
+let rec parse_impl tokens asts =
+  match tokens with
+    | [] -> List.rev asts, tokens
+    | Token("BEGIN", start_pos) :: rest_tokens ->
+        parse_block rest_tokens start_pos [] [] asts
+    | Token("DECLARE", start_pos) :: rest_tokens ->
+        parse_declare rest_tokens start_pos [] asts
+    | _ -> raise (ParseError("Unknown token", tokens))
 
-  let rec parse' tokens asts =
-    match tokens with
-      | [] -> List.rev asts, tokens
-      | Token("BEGIN", start_pos) :: rest_tokens ->
-          parse_block rest_tokens start_pos [] [] asts
-      | Token("DECLARE", start_pos) :: rest_tokens ->
-          parse_declare rest_tokens start_pos [] asts
-      | _ -> raise (ParseError("Unknown token", tokens))
+and parse_declare tokens start_pos declarations asts =
+  match tokens with
+    | [] -> raise (ParseError("Expected BEGIN", tokens))
+    | Token("BEGIN", _) :: rest_tokens ->
+        parse_block rest_tokens start_pos (List.rev declarations) [] asts
+    | _ -> parse_one_vardecl tokens start_pos declarations asts
 
-  and parse_declare tokens start_pos declarations asts =
-    match tokens with
-      | [] -> raise (ParseError("Expected BEGIN", tokens))
-      | Token("BEGIN", _) :: rest_tokens ->
-          parse_block rest_tokens start_pos (List.rev declarations) [] asts
-      | _ -> parse_one_vardecl tokens start_pos declarations asts
+and parse_one_vardecl tokens start_pos declarations asts =
+  match tokens with
+    | Token(var_name, decl_start)
+      :: Token(var_type, _)
+      :: Token(";", decl_end)
+      :: rest_tokens ->
+        let var_declaration = VarDecl(var_name, var_type) in
+        let new_ast = (var_declaration, combine_pos decl_start decl_end) in
+          parse_declare rest_tokens start_pos (new_ast :: declarations) asts
+    | _ -> raise (ParseError("Unknown token", tokens))
 
-  and parse_one_vardecl tokens start_pos declarations asts =
-    match tokens with
-      | Token(var_name, decl_start)
-        :: Token(var_type, _)
-        :: Token(";", decl_end)
-        :: rest_tokens ->
-          let var_declaration = VarDecl(var_name, var_type) in
-          let new_ast = (var_declaration, combine_pos decl_start decl_end) in
-            parse_declare rest_tokens start_pos (new_ast :: declarations) asts
-      | _ -> raise (ParseError("Unknown token", tokens))
+and parse_block tokens start_pos declarations statements asts =
+  match tokens with
+    | [] -> failwith "Expected END"
+    | Token("END", _) :: Token(";", end_pos) :: rest ->
+        let block = Block(declarations, List.rev statements) in
+        let new_ast = block, combine_pos start_pos end_pos in
+          parse_impl rest (new_ast :: asts)
+    | _ -> parse_assignment_statement tokens start_pos declarations statements asts
 
-  and parse_block tokens start_pos declarations statements asts =
-    match tokens with
-      | [] -> failwith "Expected END"
-      | Token("END", _) :: Token(";", end_pos) :: rest ->
-          let block = Block(declarations, List.rev statements) in
-          let new_ast = block, combine_pos start_pos end_pos in
-          parse' rest (new_ast :: asts)
-      | _ -> parse_assignment_statement tokens start_pos declarations statements asts
+and parse_assignment_statement tokens start_pos declarations statements asts =
+  match tokens with
+    | Token(var_name, var_pos)
+      :: Token(":", _)
+      :: Token("=", _)
+      :: rest_tokens ->
+        let expression, after_expr = parse_expression rest_tokens in
+          (match after_expr with
+             | Token(";", end_pos) :: rest ->
+                 let assignment = StmtAssignment(var_name, expression) in
+                 let new_ast = assignment, combine_pos var_pos end_pos in
+                   parse_block rest start_pos declarations (new_ast :: statements) asts
+             | _ -> raise (ParseError("Expected ';'", tokens)))
+    | _ -> raise (ParseError("Unknown token", tokens))
 
-  and parse_assignment_statement tokens start_pos declarations statements asts =
-    match tokens with
-      | Token(var_name, var_pos)
-        :: Token(":", _)
-        :: Token("=", _)
-        :: rest_tokens ->
-          let expression, after_expr = parse_expression rest_tokens in
-            match after_expr with
-              | Token(";", end_pos) :: rest ->
-                  let assignment = StmtAssignment(var_name, expression) in
-                  let new_ast = assignment, combine_pos var_pos end_pos in
-                    parse_block rest start_pos declarations (new_ast :: statements) asts
-              | _ -> raise (ParseError("Expected ';'", tokens))
-      | _ -> raise (ParseError("Unknown token", tokens))
-
-  and parse_expression tokens =
+and parse_expression tokens =
+  let parse_unary tokens =
     let rec check_all str pred pos =
       if pos >= String.length str then true
       else if not (pred str.[pos]) then false
       else check_all str pred (pos + 1)
     in
     let is_int str = check_all str is_digit 0 in
-    match tokens with
-      | Token(num, num_pos) :: after_expr when is_int num
-          -> (ExprNumLiteral num, num_pos), after_expr
-      | Token(ident, ident_pos) :: after_expr
-        -> (ExprIdentifier ident, ident_pos), after_expr
-      | _ -> raise (ParseError("Unknown token", tokens))
+      match tokens with
+        | Token(num, num_pos) :: after_expr when is_int num
+            -> (ExprNumLiteral num, num_pos), after_expr
+        | Token(ident, ident_pos) :: after_expr
+          -> (ExprIdentifier ident, ident_pos), after_expr
+        | _ -> raise (ParseError("Unknown token", tokens))
   in
-    parse' tokens []
+  let parse_binary_op_left_assoc tokens op term_parser =
+    let rec binary_op tokens left_term =
+      match tokens with
+        | Token(tok, _) :: rest_1 when tok = op ->
+            let (expr, end_pos as right_term), rest_2 = term_parser rest_1 in
+            let _, start_pos = left_term in
+              binary_op rest_2 (ExprBinaryOp(tok, left_term, right_term),
+                                combine_pos start_pos end_pos)
+        | _ -> left_term, tokens
+    in
+    let left_term, rest = term_parser tokens in
+      binary_op rest left_term
+  in
+    parse_binary_op_left_assoc tokens "+" parse_unary
+
+let parse tokens =
+  parse_impl tokens []
 
 (* This function is a REPL helper. *)
 let parseit str =
   let tokens, _ = tokenize str 0 in
   let ast, _ = parse tokens in
+    ast
+
+(* This function is another REPL helper. *)
+let parseit_expr str =
+  let tokens, _ = tokenize str 0 in
+  let ast, _ = parse_expression tokens in
     ast

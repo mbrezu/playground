@@ -58,6 +58,17 @@ let test_parse_simple_complete_block_2 () =
                Pos (27, 35))]),
       Pos (0, 40))]
 
+let test_parse_expr_helper str expected =
+  let tokens, _ = tokenize str 0 in
+  let ast, _ = parse_expression tokens in
+    assert_equal expected ast
+
+let test_parse_expression_simple_1 () =
+  test_parse_expr_helper "1 + 2" (ExprBinaryOp("+",
+                                               (ExprNumLiteral "1", Pos(0, 0)),
+                                               (ExprNumLiteral "2", Pos(4, 4))),
+                                  Pos(0, 4))
+
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
                                  "test_parse_declare_begin_end" >::
@@ -68,6 +79,8 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_simple_complete_block_1;
                                  "test_parse_simple_complete_block_2" >::
                                    test_parse_simple_complete_block_2;
+                                 "test_parse_expression_simple_1" >::
+                                   test_parse_expression_simple_1;
                                  "test_parse_begin_end" >:: test_parse_begin_end]
 
 let _ =

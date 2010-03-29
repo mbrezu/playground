@@ -7,6 +7,8 @@ let is_digit ch = ch >= '0' && ch <= '9'
 let is_letter ch = ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z'
 let is_alnum ch = is_letter ch || is_digit ch
 
+let (|>) x f = f x
+
 let tokenize str start_pos =
   let is_ws ch = ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' in
   let lex_while str start_pos pred =
@@ -19,7 +21,7 @@ let tokenize str start_pos =
       if final_pos < start_pos
       then failwith "Lexer internal error."
       else
-        Token (String.sub str start_pos (final_pos - start_pos + 1),
+        Token (String.sub str start_pos (final_pos - start_pos + 1) |> String.uppercase,
                Pos (start_pos, final_pos)), final_pos + 1
   in
   let rec tokenize' str start_pos acc =
@@ -57,9 +59,39 @@ type ast =
   | ExprIdentifier of string
       (* A sum expression. *)
   | ExprBinaryOp of string * ast_with_pos * ast_with_pos
+      (* Select main node . *)
+  | Select of select_stmt
+      (* Select fields/columns. *)
+  | SelectField of string
+      (* FROM clause. *)
+  | SelectFromClause of string
 and ast_with_pos = ast * pos
+and select_stmt = { fields: ast_with_pos list;
+                    from: ast_with_pos }
 
 exception ParseError of string * token list
+
+let parse_list tokens elm_parser sep_parser elm_pred sep_pred =
+  let rec parse_elem tokens fields =
+    match tokens with
+      | hd :: _ when elm_pred hd ->
+          let new_field, rest = elm_parser tokens in
+            parse_sep rest (new_field :: fields)
+      | _ -> List.rev fields, tokens
+  and parse_sep tokens fields =
+    match tokens with
+      | hd :: tl when sep_pred hd ->
+          let rest = sep_parser tokens in
+            parse_elem rest fields
+      | _ -> List.rev fields, tokens
+  in
+    parse_elem tokens []
+
+let parse_comma_list tokens elm_parser =
+  let comma_pred = function Token(",", _) -> true | _ -> false in
+  let comma_parser = List.tl in
+  let elm_pred _ = true in
+    parse_list tokens elm_parser comma_parser elm_pred comma_pred
 
 let rec parse_impl tokens asts =
   match tokens with
@@ -127,10 +159,10 @@ and parse_expression tokens =
           -> (ExprIdentifier ident, ident_pos), after_expr
         | _ -> raise (ParseError("Unknown token", tokens))
   in
-  let parse_binary_op_left_assoc tokens op term_parser =
+  let parse_binary_op_left_assoc tokens ops term_parser =
     let rec binary_op tokens left_term =
       match tokens with
-        | Token(tok, _) :: rest_1 when tok = op ->
+        | Token(tok, _) :: rest_1 when List.mem tok ops ->
             let (expr, end_pos as right_term), rest_2 = term_parser rest_1 in
             let _, start_pos = left_term in
               binary_op rest_2 (ExprBinaryOp(tok, left_term, right_term),
@@ -140,7 +172,33 @@ and parse_expression tokens =
     let left_term, rest = term_parser tokens in
       binary_op rest left_term
   in
-    parse_binary_op_left_assoc tokens "+" parse_unary
+  let term_parser tokens = parse_binary_op_left_assoc tokens ["*"; "/"] parse_unary in
+    parse_binary_op_left_assoc tokens ["+"; "-"] term_parser
+
+and parse_select tokens =
+  match tokens with
+    | Token("SELECT", start_pos) :: rest ->
+        let fields, rest2 = parse_select_fields rest in
+          (match rest2 with
+             | Token("FROM", end_pos) :: rest3 ->
+                 let (_, end_pos as from_clause), rest4 = parse_select_from_clause rest2 in
+                 let select = { fields = fields; from = from_clause } in
+                 let new_ast = select, combine_pos start_pos end_pos in
+                   new_ast, rest4
+             | _ -> raise (ParseError("Expected a FROM clause", tokens)))
+    | _ -> raise (ParseError("Expected a SELECT statement", tokens))
+and parse_select_fields tokens =
+  let field_parser tokens =
+    match tokens with
+      | Token(tok, pos) :: tl -> (SelectField(tok), pos), tl
+      | _ -> raise (ParseError("Expected a field", tokens))
+  in
+    parse_comma_list tokens field_parser
+and parse_select_from_clause tokens =
+  match tokens with
+    | Token("FROM", start_pos) :: Token(tableName, end_pos) :: rest ->
+        (SelectFromClause(tableName), combine_pos start_pos end_pos), rest
+    | _ -> raise (ParseError("Expected a FROM clause", tokens))
 
 let parse tokens =
   parse_impl tokens []
@@ -155,4 +213,10 @@ let parseit str =
 let parseit_expr str =
   let tokens, _ = tokenize str 0 in
   let ast, _ = parse_expression tokens in
+    ast
+
+(* This function is another REPL helper. *)
+let parseit_select str =
+  let tokens, _ = tokenize str 0 in
+  let ast, _ = parse_select tokens in
     ast

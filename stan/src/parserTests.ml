@@ -17,9 +17,9 @@ let test_lex_simple_select () =
   test_lex_helper
     "SELECT Field1 FROM TestTable;"
     [Token ("SELECT", Pos (0, 5));
-     Token ("Field1", Pos (7, 12));
+     Token ("FIELD1", Pos (7, 12));
      Token ("FROM", Pos (14, 17));
-     Token ("TestTable", Pos (19, 27));
+     Token ("TESTTABLE", Pos (19, 27));
      Token (";", Pos (28, 28))]
 
 let test_parse_helper str expected =
@@ -40,21 +40,21 @@ let test_parse_declare_begin_end () =
 let test_parse_empty_block_with_decl () =
   test_parse_helper
     "DECLARE var INTEGER; BEGIN END;"
-    [Block([VarDecl("var", "INTEGER"), Pos(8, 19)], []), Pos(0, 30)]
+    [Block([VarDecl("VAR", "INTEGER"), Pos(8, 19)], []), Pos(0, 30)]
 
 let test_parse_simple_complete_block_1 () =
   test_parse_helper
     "DECLARE var INTEGER; BEGIN var := 0; END;"
-    [(Block ([(VarDecl ("var", "INTEGER"), Pos (8, 19))],
-             [(StmtAssignment ("var", (ExprNumLiteral "0", Pos (34, 34))),
+    [(Block ([(VarDecl ("VAR", "INTEGER"), Pos (8, 19))],
+             [(StmtAssignment ("VAR", (ExprNumLiteral "0", Pos (34, 34))),
                Pos (27, 35))]),
       Pos (0, 40))]
 
 let test_parse_simple_complete_block_2 () =
   test_parse_helper
     "DECLARE var INTEGER; BEGIN var := a; END;"
-    [(Block ([(VarDecl ("var", "INTEGER"), Pos (8, 19))],
-             [(StmtAssignment ("var", (ExprIdentifier "a", Pos (34, 34))),
+    [(Block ([(VarDecl ("VAR", "INTEGER"), Pos (8, 19))],
+             [(StmtAssignment ("VAR", (ExprIdentifier "A", Pos (34, 34))),
                Pos (27, 35))]),
       Pos (0, 40))]
 
@@ -64,10 +64,68 @@ let test_parse_expr_helper str expected =
     assert_equal expected ast
 
 let test_parse_expression_simple_1 () =
-  test_parse_expr_helper "1 + 2" (ExprBinaryOp("+",
-                                               (ExprNumLiteral "1", Pos(0, 0)),
-                                               (ExprNumLiteral "2", Pos(4, 4))),
-                                  Pos(0, 4))
+  let expected = (ExprBinaryOp("+",
+                               (ExprNumLiteral "1", Pos(0, 0)),
+                               (ExprNumLiteral "2", Pos(4, 4))),
+                  Pos(0, 4)) in
+    test_parse_expr_helper "1 + 2" expected
+
+let test_parse_expression_simple_2 () =
+  let mul_tree = (ExprBinaryOp ("*",
+                                (ExprNumLiteral "2", Pos(4, 4)),
+                                (ExprNumLiteral "3", Pos(8, 8))),
+                  Pos(4, 8)) in
+  let expected = (ExprBinaryOp("+",
+                               (ExprNumLiteral "1", Pos(0, 0)),
+                               mul_tree),
+                  Pos(0, 8)) in
+  test_parse_expr_helper "1 + 2 * 3" expected
+
+let test_parse_expression_simple_3 () =
+  let second_sum = (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (0, 0)),
+                                 (ExprNumLiteral "2", Pos (4, 4))),
+                    Pos (0, 4)) in
+  let expected = (ExprBinaryOp ("+",
+                                second_sum,
+                                (ExprNumLiteral "3", Pos (8, 8))),
+                  Pos (0, 8))
+  in
+    test_parse_expr_helper "1 + 2 + 3" expected
+
+let test_parse_expression_simple_4 () =
+  let expected = (ExprBinaryOp ("-",
+                                (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (0, 0)),
+                                               (ExprNumLiteral "2", Pos (4, 4))),
+                                 Pos (0, 4)),
+                                (ExprNumLiteral "3", Pos (8, 8))),
+                  Pos (0, 8))
+  in
+    test_parse_expr_helper "1 + 2 - 3" expected
+
+let test_parse_expression_simple_5 () =
+  let expected = (ExprBinaryOp ("+",
+                                (ExprBinaryOp ("/", (ExprNumLiteral "1", Pos (0, 0)),
+                                               (ExprNumLiteral "2", Pos (4, 4))),
+                                 Pos (0, 4)),
+                                (ExprBinaryOp ("*", (ExprNumLiteral "2", Pos (8, 8)),
+                                               (ExprNumLiteral "3", Pos (12, 12))),
+                                 Pos (8, 12))),
+                  Pos (0, 12))
+  in
+    test_parse_expr_helper "1 / 2 + 2 * 3" expected
+
+let test_parse_select_helper str expected =
+  let tokens, _ = tokenize str 0 in
+  let ast, _ = parse_select tokens in
+    assert_equal expected ast
+
+let test_parse_simple_select_1 () =
+  let expected = ({fields = [(SelectField "*", Pos (7, 7))];
+                   from = (SelectFromClause "TABLE", Pos (9, 18))},
+                  Pos (0, 18))
+  in
+    test_parse_select_helper "SELECT * FROM table" expected;
+    test_parse_select_helper "select * from table" expected
 
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
@@ -81,6 +139,16 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_simple_complete_block_2;
                                  "test_parse_expression_simple_1" >::
                                    test_parse_expression_simple_1;
+                                 "test_parse_expression_simple_2" >::
+                                   test_parse_expression_simple_2;
+                                 "test_parse_expression_simple_3" >::
+                                   test_parse_expression_simple_3;
+                                 "test_parse_expression_simple_4" >::
+                                   test_parse_expression_simple_4;
+                                 "test_parse_expression_simple_5" >::
+                                   test_parse_expression_simple_5;
+                                 "test_parse_simple_select_1" >::
+                                   test_parse_simple_select_1;
                                  "test_parse_begin_end" >:: test_parse_begin_end]
 
 let _ =

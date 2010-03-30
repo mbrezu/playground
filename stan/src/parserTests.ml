@@ -120,12 +120,56 @@ let test_parse_select_helper str expected =
     assert_equal expected ast
 
 let test_parse_simple_select_1 () =
-  let expected = ({fields = [(SelectField "*", Pos (7, 7))];
-                   from = (SelectFromClause "TABLE", Pos (9, 18))},
+  let expected = ({fields = [(ExprIdentifier "*", Pos (7, 7))];
+                   from =
+                      (SelectFromClause [(ExprIdentifier "TABLE", Pos (14, 18))],
+                       Pos (9, 18))},
                   Pos (0, 18))
   in
     test_parse_select_helper "SELECT * FROM table" expected;
     test_parse_select_helper "select * from table" expected
+
+let test_parse_simple_select_2 () =
+  let expected = ({fields =
+                      [(ExprIdentifier "*", Pos (7, 7));
+                       (ExprIdentifier "ORDERID", Pos (10, 16))];
+                   from =
+                      (SelectFromClause
+                         [(ExprIdentifier "TABLE", Pos (23, 27));
+                          (ExprIdentifier "ORDERS", Pos (30, 35))],
+                       Pos (18, 35))},
+                  Pos (0, 35))
+  in
+    test_parse_select_helper "SELECT *, OrderId FROM table, orders" expected
+
+let test_parse_simple_select_3 () =
+  let expected = ({fields =
+                      [(ExprBinaryOp (".",
+                                      (ExprIdentifier "O", Pos (7, 7)),
+                                      (ExprIdentifier "ORDERID", Pos (9, 15))),
+                        Pos (7, 15))];
+                   from =
+                      (SelectFromClause
+                         [(ExprBinaryOp ("as",
+                                         (ExprIdentifier "ORDERS", Pos (22, 27)),
+                                         (ExprIdentifier "O", Pos (29, 29))),
+                           Pos (22, 29))],
+                       Pos (17, 29))},
+                  Pos (0, 29))
+  in
+    test_parse_select_helper "SELECT o.OrderId FROM orders o" expected
+
+let test_parse_simple_select_4 () =
+  let expected = ({fields =
+                      [(ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)),
+                                      (ExprNumLiteral "2", Pos (11, 11))),
+                        Pos (7, 11))];
+                   from =
+                      (SelectFromClause [(ExprIdentifier "DUAL", Pos (18, 21))],
+                       Pos (13, 21))},
+                  Pos (0, 21))
+  in
+    test_parse_select_helper "SELECT 1 + 2 FROM dual" expected
 
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
@@ -149,6 +193,12 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_simple_5;
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;
+                                 "test_parse_simple_select_2" >::
+                                   test_parse_simple_select_2;
+                                 "test_parse_simple_select_3" >::
+                                   test_parse_simple_select_3;
+                                 "test_parse_simple_select_4" >::
+                                   test_parse_simple_select_4;
                                  "test_parse_begin_end" >:: test_parse_begin_end]
 
 let _ =

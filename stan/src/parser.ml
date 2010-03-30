@@ -8,6 +8,7 @@ let is_letter ch = ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z'
 let is_alnum ch = is_letter ch || is_digit ch
 
 let (|>) x f = f x
+let const k = fun _ -> k
 
 let tokenize str start_pos =
   let is_ws ch = ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' in
@@ -61,10 +62,8 @@ type ast =
   | ExprBinaryOp of string * ast_with_pos * ast_with_pos
       (* Select main node . *)
   | Select of select_stmt
-      (* Select fields/columns. *)
-  | SelectField of string
       (* FROM clause. *)
-  | SelectFromClause of string
+  | SelectFromClause of ast_with_pos list
 and ast_with_pos = ast * pos
 and select_stmt = { fields: ast_with_pos list;
                     from: ast_with_pos }
@@ -87,11 +86,22 @@ let parse_list tokens elm_parser sep_parser elm_pred sep_pred =
   in
     parse_elem tokens []
 
-let parse_comma_list tokens elm_parser =
+let parse_comma_list tokens elm_parser elm_pred =
   let comma_pred = function Token(",", _) -> true | _ -> false in
   let comma_parser = List.tl in
-  let elm_pred _ = true in
     parse_list tokens elm_parser comma_parser elm_pred comma_pred
+
+let rec check_all str pred pos =
+  if pos >= String.length str then true
+  else if not (pred str.[pos]) then false
+  else check_all str pred (pos + 1)
+
+let is_int str = check_all str is_digit 0
+
+let is_identifier str =
+  String.length str > 0
+  && (is_letter str.[0] || str.[0] == '_')
+  && check_all str (fun ch -> is_alnum ch || ch == '_') 1
 
 let rec parse_impl tokens asts =
   match tokens with
@@ -146,18 +156,17 @@ and parse_assignment_statement tokens start_pos declarations statements asts =
 
 and parse_expression tokens =
   let parse_unary tokens =
-    let rec check_all str pred pos =
-      if pos >= String.length str then true
-      else if not (pred str.[pos]) then false
-      else check_all str pred (pos + 1)
-    in
-    let is_int str = check_all str is_digit 0 in
-      match tokens with
-        | Token(num, num_pos) :: after_expr when is_int num
-            -> (ExprNumLiteral num, num_pos), after_expr
-        | Token(ident, ident_pos) :: after_expr
-          -> (ExprIdentifier ident, ident_pos), after_expr
-        | _ -> raise (ParseError("Unknown token", tokens))
+    match tokens with
+      | Token(table, start_pos) :: Token(".", _) :: Token(field, end_pos) :: tl ->
+          (ExprBinaryOp(".",
+                        (ExprIdentifier(table), start_pos),
+                        (ExprIdentifier(field), end_pos)),
+           combine_pos start_pos end_pos), tl
+      | Token(num, num_pos) :: after_expr when is_int num
+          -> (ExprNumLiteral num, num_pos), after_expr
+      | Token(ident, ident_pos) :: after_expr
+        -> (ExprIdentifier ident, ident_pos), after_expr
+      | _ -> raise (ParseError("Unknown token", tokens))
   in
   let parse_binary_op_left_assoc tokens ops term_parser =
     let rec binary_op tokens left_term =
@@ -188,16 +197,28 @@ and parse_select tokens =
              | _ -> raise (ParseError("Expected a FROM clause", tokens)))
     | _ -> raise (ParseError("Expected a SELECT statement", tokens))
 and parse_select_fields tokens =
-  let field_parser tokens =
-    match tokens with
-      | Token(tok, pos) :: tl -> (SelectField(tok), pos), tl
-      | _ -> raise (ParseError("Expected a field", tokens))
+  let elm_pred token =
+    match token with
+      | Token("FROM", _) -> false
+      | _ -> true
   in
-    parse_comma_list tokens field_parser
+    parse_comma_list tokens parse_expression elm_pred
 and parse_select_from_clause tokens =
+  let table_parser tokens =
+    match tokens with
+      | Token(table, start_pos) :: Token(alias, end_pos) :: tl when is_identifier alias
+        -> (ExprBinaryOp("as",
+                         (ExprIdentifier(table), start_pos),
+                         (ExprIdentifier(alias), end_pos)),
+            combine_pos start_pos end_pos), tl
+      | Token(tok, pos) :: tl -> (ExprIdentifier(tok), pos), tl
+      | _ -> raise (ParseError("Expected a table name", tokens))
+  in
   match tokens with
-    | Token("FROM", start_pos) :: Token(tableName, end_pos) :: rest ->
-        (SelectFromClause(tableName), combine_pos start_pos end_pos), rest
+    | Token("FROM", start_pos) :: rest ->
+        let tableExprs, rest2 = parse_comma_list rest table_parser (const true) in
+        let (_, end_pos) = tableExprs |> List.rev |> List.hd in
+          (SelectFromClause(tableExprs), combine_pos start_pos end_pos), rest2
     | _ -> raise (ParseError("Expected a FROM clause", tokens))
 
 let parse tokens =

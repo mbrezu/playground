@@ -1,14 +1,10 @@
 
-type pos = Pos of int * int
+open ParserTypes
+open Utils
 
-type token = Token of string * pos
-
-let is_digit ch = ch >= '0' && ch <= '9'
-let is_letter ch = ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z'
-let is_alnum ch = is_letter ch || is_digit ch
-
-let (|>) x f = f x
-let const k = fun _ -> k
+let is_digit ch = ch >= '0' && ch <= '9';;
+let is_letter ch = ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z';;
+let is_alnum ch = is_letter ch || is_digit ch;;
 
 let tokenize str start_pos =
   let is_ws ch = ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' in
@@ -40,35 +36,12 @@ let tokenize str start_pos =
                              Pos (start_pos, start_pos)) in
             tokenize' str (start_pos + 1) (token :: acc)
   in
-    tokenize' str start_pos []
+    tokenize' str start_pos [];;
 
 let combine_pos start_pos end_pos =
   let (Pos (start, _)) = start_pos in
   let (Pos (_, endp)) = end_pos in
-    Pos (start, endp)
-
-type ast =
-    (* PL/SQL block, with declarations and statements. *)
-  | Block of ast_with_pos list * ast_with_pos list
-      (* A variable declaration, variable name and type name. *)
-  | VarDecl of string * string
-      (* An assignment statement. *)
-  | StmtAssignment of string * ast_with_pos
-      (* A numeric literal expression. *)
-  | ExprNumLiteral of string
-      (* An identifier used in an expression. *)
-  | ExprIdentifier of string
-      (* A sum expression. *)
-  | ExprBinaryOp of string * ast_with_pos * ast_with_pos
-      (* Select main node . *)
-  | Select of select_stmt
-      (* FROM clause. *)
-  | SelectFromClause of ast_with_pos list
-and ast_with_pos = ast * pos
-and select_stmt = { fields: ast_with_pos list;
-                    from: ast_with_pos }
-
-exception ParseError of string * token list
+    Pos (start, endp);;
 
 let parse_list tokens elm_parser sep_parser elm_pred sep_pred =
   let rec parse_elem tokens fields =
@@ -84,24 +57,24 @@ let parse_list tokens elm_parser sep_parser elm_pred sep_pred =
             parse_elem rest fields
       | _ -> List.rev fields, tokens
   in
-    parse_elem tokens []
+    parse_elem tokens [];;
 
 let parse_comma_list tokens elm_parser elm_pred =
   let comma_pred = function Token(",", _) -> true | _ -> false in
   let comma_parser = List.tl in
-    parse_list tokens elm_parser comma_parser elm_pred comma_pred
+    parse_list tokens elm_parser comma_parser elm_pred comma_pred;;
 
 let rec check_all str pred pos =
   if pos >= String.length str then true
   else if not (pred str.[pos]) then false
-  else check_all str pred (pos + 1)
+  else check_all str pred (pos + 1);;
 
-let is_int str = check_all str is_digit 0
+let is_int str = check_all str is_digit 0;;
 
 let is_identifier str =
   String.length str > 0
   && (is_letter str.[0] || str.[0] == '_')
-  && check_all str (fun ch -> is_alnum ch || ch == '_') 1
+  && check_all str (fun ch -> is_alnum ch || ch == '_') 1;;
 
 let rec parse_impl tokens asts =
   match tokens with
@@ -219,25 +192,25 @@ and parse_select_from_clause tokens =
         let tableExprs, rest2 = parse_comma_list rest table_parser (const true) in
         let (_, end_pos) = tableExprs |> List.rev |> List.hd in
           (SelectFromClause(tableExprs), combine_pos start_pos end_pos), rest2
-    | _ -> raise (ParseError("Expected a FROM clause", tokens))
+    | _ -> raise (ParseError("Expected a FROM clause", tokens));;
 
 let parse tokens =
-  parse_impl tokens []
+  parse_impl tokens [];;
 
 (* This function is a REPL helper. *)
 let parseit str =
   let tokens, _ = tokenize str 0 in
   let ast, _ = parse tokens in
-    ast
+    ast;;
 
 (* This function is another REPL helper. *)
 let parseit_expr str =
   let tokens, _ = tokenize str 0 in
   let ast, _ = parse_expression tokens in
-    ast
+    ast;;
 
 (* This function is another REPL helper. *)
 let parseit_select str =
   let tokens, _ = tokenize str 0 in
   let ast, _ = parse_select tokens in
-    ast
+    ast;;

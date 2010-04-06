@@ -1,6 +1,8 @@
 
 open OUnit
+open ParserTypes
 open Parser
+open Sem
 
 let test_lex_helper str expected =
   let tokens, _ = tokenize str 0 in
@@ -171,6 +173,23 @@ let test_parse_simple_select_4 () =
   in
     test_parse_select_helper "SELECT 1 + 2 FROM dual" expected
 
+let test_sem () =
+  let push k = get_state () >>= fun st -> set_state (k :: st) in
+  let pop () = get_state () >>= fun st ->
+    match st with
+      | h :: t -> (set_state t >>= fun _ -> return h)
+      | [] -> error () in
+  let swap () =
+    pop () >>= fun t1 ->
+      pop () >>= fun t2 ->
+        push t1 >>= fun _ ->
+          push t2
+  in
+    assert_equal ([], Some 1) (run (return 1) []);
+    assert_equal ([1], Some ()) (run (push 1) []);
+    assert_equal ([], Some 1) (run (push 1 >>= fun _ -> pop ()) []);
+    assert_equal ([2; 1], Some ()) (run (swap ()) [1; 2]);;
+
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
                                  "test_parse_declare_begin_end" >::
@@ -199,6 +218,7 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_simple_select_3;
                                  "test_parse_simple_select_4" >::
                                    test_parse_simple_select_4;
+                                 "test_sem" >:: test_sem;
                                  "test_parse_begin_end" >:: test_parse_begin_end]
 
 let _ =

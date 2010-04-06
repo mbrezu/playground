@@ -13,7 +13,10 @@ def forceRun(cmd):
     set_force_build(False)
     if status: sys.exit(status)
 
-modules = ["parser",
+modules = ["parserTypes",
+           "utils",
+           "parser",
+           "sem",
            "parserTests"]
 
 packages = ["oUnit"]

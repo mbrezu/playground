@@ -15,29 +15,31 @@ let test_lex_begin_end () =
      Token ("END", Pos (6, 8));
      Token (";", Pos (9, 9))]
 
-(* let test_lex_simple_select () = *)
-(*   test_lex_helper *)
-(*     "SELECT Field1 FROM TestTable;" *)
-(*     [Token ("SELECT", Pos (0, 5)); *)
-(*      Token ("FIELD1", Pos (7, 12)); *)
-(*      Token ("FROM", Pos (14, 17)); *)
-(*      Token ("TESTTABLE", Pos (19, 27)); *)
-(*      Token (";", Pos (28, 28))] *)
+let test_lex_simple_select () =
+  test_lex_helper
+    "SELECT Field1 FROM TestTable;"
+    [Token ("SELECT", Pos (0, 5));
+     Token ("FIELD1", Pos (7, 12));
+     Token ("FROM", Pos (14, 17));
+     Token ("TESTTABLE", Pos (19, 27));
+     Token (";", Pos (28, 28))]
 
-(* let test_parse_helper str expected = *)
-(*   let tokens, _ = tokenize str 0 in *)
-(*   let ast, _ = parse tokens in *)
-(*     assert_equal expected ast *)
+let test_parse_helper str expected =
+  let tokens, _ = tokenize str 0 in
+  let warnings, result_option = parse tokens in
+    match result_option with
+      | Some (_, ast) -> assert_equal expected ast
+      | None -> assert_failure "Parse failed.";;
 
-(* let test_parse_begin_end () = *)
-(*   test_parse_helper *)
-(*     "BEGIN END;" *)
-(*     [Block([], []), Pos(0, 9)] *)
+let test_parse_begin_end () =
+  test_parse_helper
+    "BEGIN END;"
+    (Program([Block([], []), Pos(0, 9)]), Pos(0, 9))
 
-(* let test_parse_declare_begin_end () = *)
-(*   test_parse_helper *)
-(*     "DECLARE BEGIN END;" *)
-(*     [Block([], []), Pos(0, 17)] *)
+let test_parse_declare_begin_end () =
+  test_parse_helper
+    "DECLARE BEGIN END;"
+    (Program[Block([], []), Pos(0, 17)], Pos(0, 17))
 
 (* let test_parse_empty_block_with_decl () = *)
 (*   test_parse_helper *)
@@ -191,9 +193,10 @@ let test_lex_begin_end () =
 (*     assert_equal ([2; 1], Some ()) (run (swap ()) [1; 2]);; *)
 
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
-                                 (* "test_lex_simple_select" >:: test_lex_simple_select; *)
-                                 (* "test_parse_declare_begin_end" >:: *)
-                                 (*   test_parse_declare_begin_end; *)
+                                 "test_lex_simple_select" >:: test_lex_simple_select;
+                                 "test_parse_begin_end" >:: test_parse_begin_end;
+                                 "test_parse_declare_begin_end" >::
+                                   test_parse_declare_begin_end;
                                  (* "test_parse_empty_block_with_decl" >:: *)
                                  (*   test_parse_empty_block_with_decl; *)
                                  (* "test_parse_simple_complete_block_1" >:: *)
@@ -219,7 +222,6 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  (* "test_parse_simple_select_4" >:: *)
                                  (*   test_parse_simple_select_4; *)
                                  (* "test_sem" >:: test_sem; *)
-                                 (* "test_parse_begin_end" >:: test_parse_begin_end *)
                                 ]
 
 let _ =

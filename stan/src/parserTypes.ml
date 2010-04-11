@@ -7,4 +7,5 @@ type token = Token of (string * pos);;
 
 type input = (token list) * (warning list);;
 
-type 'a parser = ParserM of (input -> (input * 'a) list);;
+type 'a parser = ParserM of (input -> (warning list) * (token list * 'a) option);;
+

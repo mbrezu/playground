@@ -8,26 +8,24 @@ type warning = Warning of (string * int);;
 
 type token = Token of (string * pos);;
 
-type input = (token list) * (warning list);;
+type input = token option * (token list) * (warning list);;
 
-type 'a parser = ParserM of (input -> (warning list) * (token list * 'a) option);;
+type 'a parser = ParserM of (input ->
+                               (warning list) * (token option * token list * 'a) option);;
 
-let run_parser (ParserM fn) inp =
-  match fn inp with
-    | warnings, Some hd -> warnings, Some hd
-    | warnings, None -> warnings, None;;
+let run_parser (ParserM fn) inp = fn inp;;
 
 let (|>) x f = f x;;
 
 let (<|) f x = f x;;
 
 let bind m f =
-  ParserM (fun (tokens, warnings) ->
-             let apply_next (new_tokens, result) warnings =
+  ParserM (fun (last_token, tokens, warnings) ->
+             let apply_next (new_last_token, new_tokens, result) warnings =
                let new_parser = f result in
-                 run_parser new_parser (new_tokens, warnings)
+                 run_parser new_parser (new_last_token, new_tokens, warnings)
              in
-               match run_parser m (tokens, warnings) with
+               match run_parser m (last_token, tokens, warnings) with
                  | warnings, Some hd -> apply_next hd warnings
                  | warnings, None -> warnings, None);;
 
@@ -36,26 +34,27 @@ let (>>=) = bind;;
 let (<+>) p q =
   p >>= fun _ -> q;;
 
-let result v = ParserM (fun (tokens, warnings) -> warnings, Some (tokens, v));;
+let result v = ParserM (fun (last_token, tokens, warnings) ->
+                          warnings, Some (last_token, tokens, v));;
 
 let warning warning_message =
-  ParserM (fun (tokens, warnings) ->
+  ParserM (fun (last_token, tokens, warnings) ->
              let pos = match tokens with
                | Token(_, Pos(start, _)) :: _ -> start
                | [] -> 0 in
              let warning = Warning(warning_message, pos) in
              let new_warnings = warning :: warnings in
-               new_warnings, Some (tokens, ()));;
+               new_warnings, Some (last_token, tokens, ()));;
 
 let error () =
-  ParserM (fun (tokens, warnings) -> warnings, None);;
+  ParserM (fun (last_token, tokens, warnings) -> warnings, None);;
 
 (* End of parser monad with warnings. *)
 
 let item () =
-  ParserM (fun (tokens, warnings) ->
+  ParserM (fun (last_token, tokens, warnings) ->
              match tokens with
-               | hd :: tl -> warnings, Some (tl, hd)
+               | hd :: tl -> warnings, Some (Some hd, tl, hd)
                | [] -> warnings, None);;
 
 let sat p =
@@ -71,7 +70,7 @@ let digit = sat <| pred_first_char (fun ch -> ch >= '0' && ch <= '9');;
 
 let upper = sat <| pred_first_char (fun ch -> ch >= 'A' && ch <= 'Z');;
 
-let lower = sat <| pred_first_char (fun ch -> ch >= 'a' && ch <= 'z') |> sat;;
+let lower = sat <| pred_first_char (fun ch -> ch >= 'a' && ch <= 'z');;
 
 let (<|>) p q = ParserM (fun inp ->
                            match run_parser p inp with

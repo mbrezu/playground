@@ -3,18 +3,15 @@ open ParserTypes;;
 
 open Utils;;
 
-let run_parser (ParserM fn) inp =
-  match fn inp with
-    | warnings, Some hd -> warnings, Some hd
-    | warnings, None -> warnings, None;;
+let run_parser (ParserM fn) inp = fn inp;;
 
 let bind m f =
-  ParserM (fun (tokens, warnings) ->
-             let apply_next (new_tokens, result) warnings =
+  ParserM (fun (last_token, tokens, warnings) ->
+             let apply_next (new_last_token, new_tokens, result) warnings =
                let new_parser = f result in
-                 run_parser new_parser (new_tokens, warnings)
+                 run_parser new_parser (new_last_token, new_tokens, warnings)
              in
-               match run_parser m (tokens, warnings) with
+               match run_parser m (last_token, tokens, warnings) with
                  | warnings, Some hd -> apply_next hd warnings
                  | warnings, None -> warnings, None);;
 
@@ -34,34 +31,38 @@ let (<|>) p q = ParserM (fun inp ->
                                  run_parser q inp);;
 
 (* A parser that does not consume any input, but `return`s v. *)
-let result v = ParserM (fun (tokens, warnings) -> warnings, Some (tokens, v));;
+let result v = ParserM (fun (last_token, tokens, warnings) ->
+                          warnings, Some (last_token, tokens, v));;
 
 (* Add a warning, but don't terminate the parser. *)
 let warning warning_message =
-  ParserM (fun (tokens, warnings) ->
+  ParserM (fun (last_token, tokens, warnings) ->
              let pos = match tokens with
                | Token(_, Pos(start, _)) :: _ -> start
-               | [] -> 0 in
+               | [] -> (match last_token with
+                          | Some(Token(_, Pos(_, pos))) -> pos + 1
+                          | None -> 0)
+             in
              let warning = Warning(warning_message, pos) in
              let new_warnings = warning :: warnings in
-               new_warnings, Some (tokens, ()));;
+               new_warnings, Some (last_token, tokens, ()));;
 
 (* Terminate this parser. *)
 let error () =
-  ParserM (fun (tokens, warnings) -> warnings, None);;
+  ParserM (fun (last_token, tokens, warnings) -> warnings, None);;
 
 (* Parse one item. *)
 let item () =
-  ParserM (fun (tokens, warnings) ->
+  ParserM (fun (last_token, tokens, warnings) ->
              match tokens with
-               | hd :: tl -> warnings, Some (tl, hd)
+               | hd :: tl -> warnings, Some (Some hd, tl, hd)
                | [] -> warnings, None);;
 
-(* Lookahead one item. Like `item`, but doesn't consume the input*)
+(* Lookahead one item. Like `item`, but doesn't consume the input. *)
 let lookahead () =
-  ParserM (fun (tokens, warnings) ->
+  ParserM (fun (last_token, tokens, warnings) ->
              match tokens with
-               | hd :: tl -> warnings, Some (tokens, hd)
+               | hd :: tl -> warnings, Some (last_token, tokens, hd)
                | [] -> warnings, None);;
 
 (* Parse one item, if it satisfies predicate `p`. *)
@@ -93,3 +94,31 @@ let sepby1 p sep =
 (* Parse one token with content `content`. *)
 let consume content =
   sat (fun (Token(token_content, _)) -> token_content = content);;
+
+(* Parse using `p` until next token has value `next`. *)
+let rec until p next =
+  lookahead () >>= fun (Token(token, _)) ->
+    if token <> next
+    then
+      p >>= fun first ->
+        until p next >>= fun others ->
+          result (first :: others)
+    else
+      result [];;
+
+let token_content (Token(content, _)) = content;;
+
+let token_pos (Token(_, pos)) = pos;;
+
+let parse_semicolon () =
+  ParserM (fun (last_token, tokens, warnings) ->
+             match tokens with
+               | Token(";", pos) as hd :: tl -> warnings, Some (Some hd, tl, hd)
+               | _ ->
+                   let pos = match last_token with
+                     | Some(Token(_, Pos(_, pos))) -> Pos(pos, pos)
+                     | None -> Pos(0, 0) in
+                   let token = Token(";", pos) in
+                   let (Pos(pos_start, _)) = pos in
+                   let new_warning = Warning("Expected ';'.", pos_start) in
+                     (new_warning :: warnings), Some (last_token, tokens, token));;

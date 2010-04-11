@@ -83,7 +83,9 @@ let alnum = letter <|> digit;;
 let rec word () =
   let rec neWord () =
     letter >>= fun token ->
+      print_string "ch\n";
       word () >>= fun tokens ->
+        print_string "word\n";
         let extract (Token(content, _)) = content in
         let strs = (token :: tokens) |> List.map extract in
           result <| [Token(String.concat "" strs, Pos(0, 0))]

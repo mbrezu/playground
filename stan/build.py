@@ -15,9 +15,11 @@ def forceRun(cmd):
 
 modules = ["parserTypes",
            "utils",
-           "parser",
-           "sem",
-           "parserTests"]
+           "pwm",
+           "lexer",
+           "plsqlParser",
+           "plsqlParserTests",
+           ]
 
 packages = ["oUnit"]
 

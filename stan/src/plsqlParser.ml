@@ -13,6 +13,9 @@ type plsql_ast =
   | ExprIdentifier of string
 and plsql_ast_with_pos = plsql_ast * pos;;
 
+let parse_semicolon () =
+  consume_or_fake ";";;
+
 let combine_pos start_token end_token =
   match start_token, end_token with
     | Token(_, Pos(start_pos, _)), Token(_, Pos(_, end_pos)) ->
@@ -93,7 +96,7 @@ and parse_expression () =
       else result (ExprIdentifier content, combine_pos expr expr);;
 
 let plsql_parser =
-  many <| parse_statement () >>= fun statements ->
+  until_eoi <| parse_statement () >>= fun statements ->
     result <| (Program(statements), (extract_limits statements))
 
 (* The PLSQL parser. Should be the only public function in this

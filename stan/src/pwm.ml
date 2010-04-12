@@ -108,22 +108,27 @@ let token_content (Token(content, _)) = content;;
 
 let token_pos (Token(_, pos)) = pos;;
 
-let parse_semicolon () =
+(* Will consume `str` like `consume`, or will add a warning and create
+   a fake `token` with content `str`. *)
+let consume_or_fake str =
   ParserM (fun (stream, warnings) ->
              let Stream(last_token, tokens) = stream in
-             match tokens with
-               | Token(";", pos) as hd :: tl -> warnings, Some (Stream(Some hd, tl), hd)
-               | _ ->
-                   let pos = match last_token with
-                     | Some(Token(_, Pos(_, pos))) -> Pos(pos, pos)
-                     | None -> Pos(0, 0) in
-                   let token = Token(";", pos) in
-                   let (Pos(pos_start, _)) = pos in
-                   let new_warning = Warning("Expected ';'.", pos_start) in
-                     (new_warning :: warnings), Some (stream, token));;
+               match tokens with
+                 | Token(content, pos) as hd :: tl when content = str ->
+                     warnings, Some (Stream(Some hd, tl), hd)
+                 | _ ->
+                     let str_len = String.length str in
+                     let pos = match last_token with
+                       | Some(Token(_, Pos(_, pos))) -> Pos(pos, pos + str_len - 1)
+                       | None -> Pos(0, str_len - 1) in
+                     let token = Token(str, pos) in
+                     let (Pos(pos_start, _)) = pos in
+                     let warning_message = sprintf "Expected '%s'." str in
+                     let new_warning = Warning(warning_message, pos_start) in
+                       (new_warning :: warnings), Some (stream, token));;
 
 (* Parser that returns `true` if there aren't any symbols left in the
-input, `false` otherwise. *)
+   input, `false` otherwise. *)
 let eoi () =
   ParserM (fun (stream, warnings) ->
              let Stream(last_token, tokens) = stream in

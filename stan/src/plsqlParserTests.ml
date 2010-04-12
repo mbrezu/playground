@@ -64,6 +64,16 @@ let test_pwm_until_eoi () =
       | _ ->
           assert_failure "Expected a warning.";;
 
+let test_pwm_consume_or_fake () =
+  let tokens, _ = tokenize "BEGIN END" 0 in
+  let parser = consume "BEGIN" <+> consume "END" <+> consume_or_fake ";" in
+  let result = run_parser parser (Stream(None, tokens), []) in
+    match result with
+      | [warning], _ ->
+          assert_equal (Warning ("Expected ';'.", 8)) warning
+      | _ ->
+          assert_failure "Expected a warning.";;
+
 let test_parse_helper str expected_warnings expected =
   let tokens, _ = tokenize str 0 in
   let warnings, result_option = parse tokens in
@@ -266,6 +276,7 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_pwm_consume_1" >:: test_pwm_consume_1;
                                  "test_pwm_consume_2" >:: test_pwm_consume_2;
                                  "test_pwm_until_eoi" >:: test_pwm_until_eoi;
+                                 "test_pwm_consume_or_fake" >:: test_pwm_consume_or_fake;
 
                                  "test_parse_declare_begin_end" >::
                                    test_parse_declare_begin_end;

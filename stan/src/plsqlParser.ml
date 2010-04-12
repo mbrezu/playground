@@ -99,5 +99,5 @@ let plsql_parser =
 (* The PLSQL parser. Should be the only public function in this
 module. *)
 let parse tokens =
-  run_parser plsql_parser (None, tokens, []);;
+  run_parser plsql_parser (Stream(None, tokens), []);;
 

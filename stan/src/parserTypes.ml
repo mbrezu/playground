@@ -5,8 +5,9 @@ type warning = Warning of (string * int);;
 
 type token = Token of (string * pos);;
 
-type input = token option * token list * warning list;;
+type 'a stream = Stream of ('a option * 'a list);;
 
-type 'a parser = ParserM of (input ->
-                               (warning list) * (token option * token list * 'a) option);;
+type 'a input = 'a stream * warning list;;
+
+type ('a, 'b) parser = ParserM of ('a input -> (warning list) * ('a stream * 'b) option);;
 

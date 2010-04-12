@@ -3,17 +3,18 @@ open OUnit;;
 open ParserTypes;;
 open PlsqlParser;;
 open Lexer;;
+open Pwm;;
 
 let test_lex_helper str expected =
   let tokens, _ = tokenize str 0 in
-    assert_equal expected tokens
+    assert_equal expected tokens;;
 
 let test_lex_begin_end () =
   test_lex_helper
     "BEGIN END;"
     [Token ("BEGIN", Pos (0, 4));
      Token ("END", Pos (6, 8));
-     Token (";", Pos (9, 9))]
+     Token (";", Pos (9, 9))];;
 
 let test_lex_simple_select () =
   test_lex_helper
@@ -22,13 +23,52 @@ let test_lex_simple_select () =
      Token ("FIELD1", Pos (7, 12));
      Token ("FROM", Pos (14, 17));
      Token ("TESTTABLE", Pos (19, 27));
-     Token (";", Pos (28, 28))]
+     Token (";", Pos (28, 28))];;
+
+let test_pwm_eoi () =
+  let result_1 = run_parser (eoi ()) (Stream(None, []), []) in
+  let tokens, _ = tokenize "BEGIN" 0 in
+  let result_2 = run_parser (eoi ()) (Stream(None, tokens), []) in
+    assert_equal ([], Some (Stream (None, []), true)) result_1;
+    assert_equal ([], Some (Stream (None, tokens), false)) result_2;;
+
+let test_pwm_consume_1 () =
+  let tokens, _ = tokenize "" 0 in
+  let result = run_parser (consume "BEGIN") (Stream(None, tokens), []) in
+    match result with
+      | [warning], None ->
+          assert_equal (Warning("Expected 'BEGIN' but reached end of input.", 0)) warning
+      | _ ->
+          assert_failure "Expected a warning.";;
+
+let test_pwm_consume_2 () =
+  let tokens, _ = tokenize "BEGIN END" 0 in
+  let result = run_parser
+    (consume "BEGIN" <+> consume "BEGIN")
+    (Stream(None, tokens), [])
+  in
+    match result with
+      | [warning], None ->
+          assert_equal (Warning ("Expected 'BEGIN' but got 'END'.", 9)) warning
+      | _ ->
+          assert_failure "Expected a warning.";;
+
+let test_pwm_until_eoi () =
+  let tokens, _ = tokenize "BEGIN END BEGIN" 0 in
+  let result =
+    run_parser (until_eoi (consume "BEGIN" <+> consume "END")) (Stream(None, tokens), [])
+  in
+    match result with
+      | [warning], None ->
+          assert_equal (Warning ("Expected 'END' but reached end of input.", 15)) warning
+      | _ ->
+          assert_failure "Expected a warning.";;
 
 let test_parse_helper str expected_warnings expected =
   let tokens, _ = tokenize str 0 in
   let warnings, result_option = parse tokens in
     (match result_option with
-       | Some (_, _, ast) -> assert_equal expected ast
+       | Some (_, ast) -> assert_equal expected ast
        | None -> assert_failure "Parse failed.");
     assert_equal expected_warnings (List.rev warnings);;
 
@@ -36,20 +76,20 @@ let test_parse_begin_end () =
   test_parse_helper
     "BEGIN END;"
     []
-    (Program([Block([], []), Pos(0, 9)]), Pos(0, 9))
+    (Program([Block([], []), Pos(0, 9)]), Pos(0, 9));;
 
 let test_parse_declare_begin_end () =
   test_parse_helper
     "DECLARE BEGIN END;"
     []
-    (Program([Block([], []), Pos(0, 17)]), Pos(0, 17))
+    (Program([Block([], []), Pos(0, 17)]), Pos(0, 17));;
 
 let test_parse_empty_block_with_decl () =
   test_parse_helper
     "DECLARE var INTEGER; BEGIN END;"
     []
     (Program([Block([VarDecl("VAR", "INTEGER"), Pos(8, 19)], []), Pos(0, 30)]),
-     Pos(0, 30))
+     Pos(0, 30));;
 
 let test_parse_begin_end_no_semicolon () =
   test_parse_helper
@@ -221,6 +261,12 @@ let test_parse_simple_complete_block_2 () =
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
                                  "test_parse_begin_end" >:: test_parse_begin_end;
+
+                                 "test_pwm_eoi" >:: test_pwm_eoi;
+                                 "test_pwm_consume_1" >:: test_pwm_consume_1;
+                                 "test_pwm_consume_2" >:: test_pwm_consume_2;
+                                 "test_pwm_until_eoi" >:: test_pwm_until_eoi;
+
                                  "test_parse_declare_begin_end" >::
                                    test_parse_declare_begin_end;
                                  "test_parse_empty_block_with_decl" >::

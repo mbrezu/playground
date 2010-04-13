@@ -74,13 +74,15 @@ let test_pwm_consume_or_fake () =
       | _ ->
           assert_failure "Expected a warning.";;
 
-let test_parse_helper str expected_warnings expected =
+let parse_helper parse_function str expected_warnings expected =
   let tokens, _ = tokenize str 0 in
-  let warnings, result_option = parse tokens in
+  let warnings, result_option = parse_function tokens in
     (match result_option with
        | Some (_, ast) -> assert_equal expected ast
        | None -> assert_failure "Parse failed.");
     assert_equal expected_warnings (List.rev warnings);;
+
+let test_parse_helper = parse_helper parse;;
 
 let test_parse_begin_end () =
   test_parse_helper
@@ -138,17 +140,14 @@ let test_parse_simple_complete_block_2 () =
                Pos (0, 40))]),
      Pos(0, 40));;
 
-(* let test_parse_expr_helper str expected = *)
-(*   let tokens, _ = tokenize str 0 in *)
-(*   let ast, _ = parse_expression tokens in *)
-(*     assert_equal expected ast *)
+let test_parse_expr_helper = parse_helper parse_expr;;
 
-(* let test_parse_expression_simple_1 () = *)
-(*   let expected = (ExprBinaryOp("+", *)
-(*                                (ExprNumLiteral "1", Pos(0, 0)), *)
-(*                                (ExprNumLiteral "2", Pos(4, 4))), *)
-(*                   Pos(0, 4)) in *)
-(*     test_parse_expr_helper "1 + 2" expected *)
+let test_parse_expression_simple_1 () =
+  let expected = (ExprBinaryOp("+",
+                               (ExprNumLiteral "1", Pos(0, 0)),
+                               (ExprNumLiteral "2", Pos(4, 4))),
+                  Pos(0, 4)) in
+    test_parse_expr_helper "1 + 2" [] expected
 
 (* let test_parse_expression_simple_2 () = *)
 (*   let mul_tree = (ExprBinaryOp ("*", *)
@@ -288,8 +287,9 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_simple_complete_block_1;
                                  "test_parse_simple_complete_block_2" >::
                                    test_parse_simple_complete_block_2;
-                                 (* "test_parse_expression_simple_1" >:: *)
-                                 (*   test_parse_expression_simple_1; *)
+
+                                 "test_parse_expression_simple_1" >::
+                                   test_parse_expression_simple_1;
                                  (* "test_parse_expression_simple_2" >:: *)
                                  (*   test_parse_expression_simple_2; *)
                                  (* "test_parse_expression_simple_3" >:: *)
@@ -298,6 +298,7 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  (*   test_parse_expression_simple_4; *)
                                  (* "test_parse_expression_simple_5" >:: *)
                                  (*   test_parse_expression_simple_5; *)
+
                                  (* "test_parse_simple_select_1" >:: *)
                                  (*   test_parse_simple_select_1; *)
                                  (* "test_parse_simple_select_2" >:: *)

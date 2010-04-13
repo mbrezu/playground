@@ -8,3 +8,6 @@ open PlsqlParser;;
 open Lexer;;
 open ParserTypes;;
 open Pwm;;
+
+#use "topfind";;
+#require "oUnit";;

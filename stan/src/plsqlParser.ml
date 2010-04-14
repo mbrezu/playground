@@ -114,7 +114,8 @@ and parse_binary_op_left_assoc ops term_parser =
       bin_op_iter first_term
 
 and parse_expression () =
-  parse_binary_op_left_assoc ["+"] (parse_unary ());;
+  let parse_term = parse_binary_op_left_assoc ["*"; "/"] (parse_unary ()) in
+    parse_binary_op_left_assoc ["+"; "-"] parse_term;;
 
 let plsql_parser =
   until_eoi <| parse_statement () >>= fun statements ->

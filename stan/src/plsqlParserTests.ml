@@ -154,49 +154,49 @@ let test_parse_expression_simple_1 () =
                   Pos(0, 4)) in
     test_parse_expr_helper "1 + 2" [] expected
 
-(* let test_parse_expression_simple_2 () = *)
-(*   let mul_tree = (ExprBinaryOp ("*", *)
-(*                                 (ExprNumLiteral "2", Pos(4, 4)), *)
-(*                                 (ExprNumLiteral "3", Pos(8, 8))), *)
-(*                   Pos(4, 8)) in *)
-(*   let expected = (ExprBinaryOp("+", *)
-(*                                (ExprNumLiteral "1", Pos(0, 0)), *)
-(*                                mul_tree), *)
-(*                   Pos(0, 8)) in *)
-(*   test_parse_expr_helper "1 + 2 * 3" expected *)
+let test_parse_expression_simple_2 () =
+  let mul_tree = (ExprBinaryOp ("*",
+                                (ExprNumLiteral "2", Pos(4, 4)),
+                                (ExprNumLiteral "3", Pos(8, 8))),
+                  Pos(4, 8)) in
+  let expected = (ExprBinaryOp("+",
+                               (ExprNumLiteral "1", Pos(0, 0)),
+                               mul_tree),
+                  Pos(0, 8)) in
+    test_parse_expr_helper "1 + 2 * 3" []expected
 
-(* let test_parse_expression_simple_3 () = *)
-(*   let second_sum = (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (0, 0)), *)
-(*                                  (ExprNumLiteral "2", Pos (4, 4))), *)
-(*                     Pos (0, 4)) in *)
-(*   let expected = (ExprBinaryOp ("+", *)
-(*                                 second_sum, *)
-(*                                 (ExprNumLiteral "3", Pos (8, 8))), *)
-(*                   Pos (0, 8)) *)
-(*   in *)
-(*     test_parse_expr_helper "1 + 2 + 3" expected *)
+let test_parse_expression_simple_3 () =
+  let second_sum = (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (0, 0)),
+                                 (ExprNumLiteral "2", Pos (4, 4))),
+                    Pos (0, 4)) in
+  let expected = (ExprBinaryOp ("+",
+                                second_sum,
+                                (ExprNumLiteral "3", Pos (8, 8))),
+                  Pos (0, 8))
+  in
+    test_parse_expr_helper "1 + 2 + 3" [] expected
 
-(* let test_parse_expression_simple_4 () = *)
-(*   let expected = (ExprBinaryOp ("-", *)
-(*                                 (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (0, 0)), *)
-(*                                                (ExprNumLiteral "2", Pos (4, 4))), *)
-(*                                  Pos (0, 4)), *)
-(*                                 (ExprNumLiteral "3", Pos (8, 8))), *)
-(*                   Pos (0, 8)) *)
-(*   in *)
-(*     test_parse_expr_helper "1 + 2 - 3" expected *)
+let test_parse_expression_simple_4 () =
+  let expected = (ExprBinaryOp ("-",
+                                (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (0, 0)),
+                                               (ExprNumLiteral "2", Pos (4, 4))),
+                                 Pos (0, 4)),
+                                (ExprNumLiteral "3", Pos (8, 8))),
+                  Pos (0, 8))
+  in
+    test_parse_expr_helper "1 + 2 - 3" [] expected
 
-(* let test_parse_expression_simple_5 () = *)
-(*   let expected = (ExprBinaryOp ("+", *)
-(*                                 (ExprBinaryOp ("/", (ExprNumLiteral "1", Pos (0, 0)), *)
-(*                                                (ExprNumLiteral "2", Pos (4, 4))), *)
-(*                                  Pos (0, 4)), *)
-(*                                 (ExprBinaryOp ("*", (ExprNumLiteral "2", Pos (8, 8)), *)
-(*                                                (ExprNumLiteral "3", Pos (12, 12))), *)
-(*                                  Pos (8, 12))), *)
-(*                   Pos (0, 12)) *)
-(*   in *)
-(*     test_parse_expr_helper "1 / 2 + 2 * 3" expected *)
+let test_parse_expression_simple_5 () =
+  let expected = (ExprBinaryOp ("+",
+                                (ExprBinaryOp ("/", (ExprNumLiteral "1", Pos (0, 0)),
+                                               (ExprNumLiteral "2", Pos (4, 4))),
+                                 Pos (0, 4)),
+                                (ExprBinaryOp ("*", (ExprNumLiteral "2", Pos (8, 8)),
+                                               (ExprNumLiteral "3", Pos (12, 12))),
+                                 Pos (8, 12))),
+                  Pos (0, 12))
+  in
+    test_parse_expr_helper "1 / 2 + 2 * 3" [] expected
 
 (* let test_parse_select_helper str expected = *)
 (*   let tokens, _ = tokenize str 0 in *)
@@ -296,14 +296,14 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
 
                                  "test_parse_expression_simple_1" >::
                                    test_parse_expression_simple_1;
-                                 (* "test_parse_expression_simple_2" >:: *)
-                                 (*   test_parse_expression_simple_2; *)
-                                 (* "test_parse_expression_simple_3" >:: *)
-                                 (*   test_parse_expression_simple_3; *)
-                                 (* "test_parse_expression_simple_4" >:: *)
-                                 (*   test_parse_expression_simple_4; *)
-                                 (* "test_parse_expression_simple_5" >:: *)
-                                 (*   test_parse_expression_simple_5; *)
+                                 "test_parse_expression_simple_2" >::
+                                   test_parse_expression_simple_2;
+                                 "test_parse_expression_simple_3" >::
+                                   test_parse_expression_simple_3;
+                                 "test_parse_expression_simple_4" >::
+                                   test_parse_expression_simple_4;
+                                 "test_parse_expression_simple_5" >::
+                                   test_parse_expression_simple_5;
 
                                  (* "test_parse_simple_select_1" >:: *)
                                  (*   test_parse_simple_select_1; *)

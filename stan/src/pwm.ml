@@ -49,64 +49,38 @@ let warning warning_message =
                new_warnings, Some (stream, ()));;
 
 (* Terminate this parser. *)
-let error () =
+let fail =
   ParserM (fun (stream, warnings) -> warnings, None);;
 
+(* Terminate the parser with a message. *)
+let error message =
+  warning message <+> fail ;;
+
 (* Parse one item. *)
-let item () =
+let item =
   ParserM (fun (Stream(_, tokens), warnings) ->
              match tokens with
                | hd :: tl -> warnings, Some (Stream(Some hd, tl), hd)
                | [] -> warnings, None);;
 
 (* Lookahead one item. Like `item`, but doesn't consume the input. *)
-let lookahead () =
+let lookahead =
   ParserM (fun (stream, warnings) ->
              let Stream(_, tokens) = stream in
                match tokens with
-                 | hd :: tl -> warnings, Some (stream, hd)
-                 | [] -> warnings, None);;
-
-(* Parse one item, if it satisfies predicate `p`. *)
-let sat p =
-  item () >>= fun token ->
-    if p token then result token else error ();;
-
-(* Parse zero or many items with parser `p`. *)
-let rec many p =
-  (p >>= fun x ->
-     many p >>= fun xs ->
-       result (x :: xs)) <|> result []
-
-(* Parse at least one item with parser `p`. *)
-let many1 p =
-  p >>= fun x ->
-    many p >>= fun xs ->
-      result (x :: xs)
-
-(* Try parser `p`; if it fails, add warning `message` and return `value`. *)
-let optional p message value = p <|> (warning message <+> result value);;
-
-(* Parse one or more `p`, separated by `sep`. *)
-let sepby1 p sep =
-  p >>= fun x ->
-    many (sep <+> p) >>= fun xs ->
-      result (x :: xs);;
+                 | hd :: tl -> warnings, Some (stream, Some(hd))
+                 | [] -> warnings, Some (stream, None));;
 
 (* Parse using `p` until next token has value `next`. *)
-let rec until p next =
-  lookahead () >>= fun (Token(token, _)) ->
-    if token <> next
-    then
-      p >>= fun first ->
-        until p next >>= fun others ->
-          result (first :: others)
-    else
-      result [];;
-
-let token_content (Token(content, _)) = content;;
-
-let token_pos (Token(_, pos)) = pos;;
+let until p next =
+  let rec until_impl acc =
+    lookahead >>= function
+      | Some(Token(token, _)) when token <> next ->
+          (p >>= fun res -> until_impl (res :: acc))
+      | _ ->
+          result (List.rev acc)
+  in
+    until_impl [];;
 
 (* Will consume `str` like `consume`, or will add a warning and create
    a fake `token` with content `str`. *)
@@ -129,17 +103,13 @@ let consume_or_fake str =
 
 (* Parser that returns `true` if there aren't any symbols left in the
    input, `false` otherwise. *)
-let eoi () =
-  ParserM (fun (stream, warnings) ->
-             let Stream(last_token, tokens) = stream in
-               match tokens with
-                 | [] -> (warnings, Some(stream, true))
-                 | _ -> (warnings, Some(stream, false)));;
+let eoi  =
+  lookahead >>= function | Some _ -> result false | None -> result true;;
 
 (* Applies parser `p` until end of input and collects results in a list. *)
 let until_eoi p =
   let rec until_eoi_impl acc =
-    eoi () >>= fun finished ->
+    eoi >>= fun finished ->
       if finished
       then result (List.rev acc)
       else p >>= fun result ->
@@ -149,9 +119,9 @@ let until_eoi p =
 
 (* Parse one token with content `content`. *)
 let consume content =
-  eoi () >>= fun eoi ->
+  eoi >>= fun eoi ->
     if not eoi then
-      item () >>= fun token ->
+      item >>= fun token ->
         let Token(token_content, _) = token in
           if token_content = content
           then result token
@@ -159,8 +129,8 @@ let consume content =
             let error_message =
               sprintf "Expected '%s' but got '%s'." content token_content
             in
-              warning error_message <+> error ()
+              error error_message
     else
       let error_message = sprintf "Expected '%s' but reached end of input." content in
-        warning error_message <+> error ();;
+        error error_message;;
 

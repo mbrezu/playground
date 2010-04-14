@@ -1,8 +1,8 @@
 #load "pwm.cmo";;
 #load "utils.cmo";;
+#load "parserTypes.cmo";;
 #load "lexer.cmo";;
 #load "plsqlParser.cmo";;
-#load "parserTypes.cmo";;
 
 open PlsqlParser;;
 open Lexer;;

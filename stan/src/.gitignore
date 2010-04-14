@@ -1,2 +1,4 @@
 *.cmi
 *.cmo
+*.cmx
+*.o

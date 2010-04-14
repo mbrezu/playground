@@ -63,8 +63,8 @@ let rec parse_statement () =
 
 and parse_block () =
   let parse_vardecl =
-    item () >>= fun variable ->
-      item () >>= fun type_name ->
+    item >>= fun variable ->
+      item >>= fun type_name ->
         parse_semicolon () >>= fun end_token ->
           result (VarDecl(token_content variable,
                           token_content type_name),
@@ -78,9 +78,9 @@ and parse_block () =
          let real_start = [start_token; Some start_token2] |> pick_first_valid in
            result (Block(declarations, statements), combine_token_pos real_start end2))
   in
-    lookahead () >>= fun content ->
+    lookahead >>= fun content ->
       match content with
-        | Token("DECLARE", _) ->
+        | Some(Token("DECLARE", _)) ->
             (consume "DECLARE" >>= fun start_token ->
                until parse_vardecl "BEGIN" >>= fun declarations ->
                  parse_begin_end declarations (Some start_token))
@@ -88,14 +88,14 @@ and parse_block () =
             parse_begin_end [] None
 
 and parse_assignment () =
-  item () >>= fun var_name ->
+  item >>= fun var_name ->
     consume ":" <+> consume "=" <+> parse_expression () >>= fun expression ->
       parse_semicolon () >>= fun end_token ->
         result (StmtAssignment(token_content var_name, expression),
                 combine_token_pos var_name end_token)
 
 and parse_unary () =
-  item () >>= fun expr ->
+  item >>= fun expr ->
     let content = token_content expr in
       if (check_all is_digit content)
       then result (ExprNumLiteral content, combine_token_pos expr expr)
@@ -103,16 +103,12 @@ and parse_unary () =
 
 and parse_binary_op_left_assoc ops term_parser =
   let rec bin_op_iter left_term =
-    eoi () >>= fun eoi ->
-      if eoi
-      then result left_term
-      else lookahead () >>= fun (Token(found_op, _)) ->
-        if List.mem found_op ops
-        then
-          consume found_op <+> term_parser >>= fun right_term ->
-            bin_op_iter (ExprBinaryOp(found_op, left_term, right_term),
-                         combine_ast_pos left_term right_term)
-        else result left_term
+    lookahead >>= function
+      | Some(Token(found_op, _)) when List.mem found_op ops ->
+          (consume found_op <+> term_parser >>= fun right_term ->
+             bin_op_iter (ExprBinaryOp(found_op, left_term, right_term),
+                          combine_ast_pos left_term right_term))
+      | _ -> result left_term
   in
     term_parser >>= fun first_term ->
       bin_op_iter first_term

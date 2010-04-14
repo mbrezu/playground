@@ -25,10 +25,15 @@ let test_lex_simple_select () =
      Token ("TESTTABLE", Pos (19, 27));
      Token (";", Pos (28, 28))];;
 
+let test_pwm_lookahead () =
+  let tokens, _ = tokenize "" 0 in
+  let result = run_parser_helper lookahead tokens in
+    assert_equal ([], Some (Stream (None, []), None)) result;;
+
 let test_pwm_eoi () =
-  let result_1 = run_parser (eoi ()) (Stream(None, []), []) in
+  let result_1 = run_parser eoi (Stream(None, []), []) in
   let tokens, _ = tokenize "BEGIN" 0 in
-  let result_2 = run_parser (eoi ()) (Stream(None, tokens), []) in
+  let result_2 = run_parser eoi (Stream(None, tokens), []) in
     assert_equal ([], Some (Stream (None, []), true)) result_1;
     assert_equal ([], Some (Stream (None, tokens), false)) result_2;;
 
@@ -271,6 +276,7 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
                                  "test_parse_begin_end" >:: test_parse_begin_end;
 
+                                 "test_pwm_lookahead" >:: test_pwm_lookahead;
                                  "test_pwm_eoi" >:: test_pwm_eoi;
                                  "test_pwm_consume_1" >:: test_pwm_consume_1;
                                  "test_pwm_consume_2" >:: test_pwm_consume_2;

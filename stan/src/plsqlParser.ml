@@ -21,11 +21,6 @@ and select_components = { fields : plsql_ast_with_pos list;
 let parse_semicolon () =
   consume_or_fake ";";;
 
-let combine_token_pos start_token end_token =
-  match start_token, end_token with
-    | Token(_, Pos(start_pos, _)), Token(_, Pos(_, end_pos)) ->
-        Pos(start_pos, end_pos);;
-
 let combine_ast_pos start_ast end_ast =
   match start_ast, end_ast with
     | (_, Pos(start_pos, _)), (_, Pos(_, end_pos)) ->
@@ -52,12 +47,6 @@ let extract_limits ast_list =
           Pos(start_pos, end_pos)
     | [] -> Pos(0, 0);;
 
-let rec pick_first_valid list_option =
-  match list_option with
-    | Some k :: _ -> k
-    | None :: tl -> pick_first_valid tl
-    | [] -> failwith "No valid element."
-
 let check_all pred str =
   let rec check_all_iter pos =
     if pos >= String.length str
@@ -73,43 +62,39 @@ let rec parse_statement () =
 
 and parse_block () =
   let parse_vardecl =
-    item >>= fun variable ->
-      item >>= fun type_name ->
-        parse_semicolon () >>= fun end_token ->
-          result (VarDecl(token_content variable,
-                          token_content type_name),
-                  combine_token_pos variable end_token)
+    wrap_pos (item >>= fun variable ->
+                item >>= fun type_name ->
+                  parse_semicolon () >>= fun _ ->
+                    result (VarDecl(token_content variable,
+                                    token_content type_name)))
   in
-  let parse_begin_end declarations start_token =
-    (consume "BEGIN" >>= fun start_token2 ->
-       until (parse_statement ()) "END" >>= fun statements ->
-       consume "END" >>= fun end1 ->
-         parse_semicolon () >>= fun end2 ->
-         let real_start = [start_token; Some start_token2] |> pick_first_valid in
-           result (Block(declarations, statements), combine_token_pos real_start end2))
+  let parse_begin_end declarations =
+    consume "BEGIN" >>= fun start_token2 ->
+      until (parse_statement ()) "END" >>= fun statements ->
+        consume "END" <+> parse_semicolon () >>= fun _ ->
+          result (Block(declarations, statements))
   in
-    lookahead >>= fun content ->
-      match content with
-        | Some(Token("DECLARE", _)) ->
-            (consume "DECLARE" >>= fun start_token ->
-               until parse_vardecl "BEGIN" >>= fun declarations ->
-                 parse_begin_end declarations (Some start_token))
-        | _ ->
-            parse_begin_end [] None
+    wrap_pos (lookahead >>= fun content ->
+                match content with
+                  | Some(Token("DECLARE", _)) ->
+                      (consume "DECLARE" >>= fun start_token ->
+                         until parse_vardecl "BEGIN" >>= fun declarations ->
+                           parse_begin_end declarations)
+                  | _ ->
+                      parse_begin_end [])
 
 and parse_assignment () =
-  item >>= fun var_name ->
-    consume ":" <+> consume "=" <+> parse_expression () >>= fun expression ->
-      parse_semicolon () >>= fun end_token ->
-        result (StmtAssignment(token_content var_name, expression),
-                combine_token_pos var_name end_token)
+  wrap_pos (item >>= fun var_name ->
+              consume ":" <+> consume "=" <+> parse_expression () >>= fun expression ->
+                parse_semicolon () >>= fun end_token ->
+                  result (StmtAssignment(token_content var_name, expression)))
 
 and parse_unary () =
-  item >>= fun expr ->
-    let content = token_content expr in
-      if (check_all is_digit content)
-      then result (ExprNumLiteral content, combine_token_pos expr expr)
-      else result (ExprIdentifier content, combine_token_pos expr expr)
+  wrap_pos (item >>= fun expr ->
+              let content = token_content expr in
+                if (check_all is_digit content)
+                then result (ExprNumLiteral content)
+                else result (ExprIdentifier content))
 
 and parse_binary_op_left_assoc ops term_parser =
   let rec bin_op_iter left_term =

@@ -34,6 +34,28 @@ let (<|>) p q = ParserM (fun inp ->
 let result v = ParserM (fun (stream, warnings) ->
                           warnings, Some (stream, v));;
 
+(* A parser that returns the next position in the stream. *)
+let get_next_pos = ParserM (fun (stream, warnings) ->
+                              let Stream(last_token, tokens) = stream in
+                                match tokens with
+                                  | Token(_, Pos(start_pos, _)) :: _ ->
+                                      warnings, Some (stream, start_pos)
+                                  | [] ->
+                                      (match last_token with
+                                         | Some(Token(_, Pos(_, end_pos))) ->
+                                             warnings, Some (stream, end_pos + 1)
+                                         | None ->
+                                             warnings, Some (stream, 0)));;
+
+(* A parser that returns the previous position in the stream. *)
+let get_previous_pos = ParserM (fun (stream, warnings) ->
+                                  let Stream(last_token, tokens) = stream in
+                                    match last_token with
+                                      | Some(Token(_, Pos(_, end_pos))) ->
+                                          warnings, Some (stream, end_pos)
+                                      | None ->
+                                          warnings, Some (stream, 0));;
+
 (* Add a warning, but don't terminate the parser. *)
 let warning warning_message =
   ParserM (fun (stream, warnings) ->

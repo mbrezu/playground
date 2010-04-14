@@ -12,7 +12,11 @@ type plsql_ast =
   | ExprNumLiteral of string
   | ExprIdentifier of string
   | ExprBinaryOp of string * plsql_ast_with_pos * plsql_ast_with_pos
-and plsql_ast_with_pos = plsql_ast * pos;;
+  | Select of select_components
+  | SelectFromClause of plsql_ast_with_pos list
+and plsql_ast_with_pos = plsql_ast * pos
+and select_components = { fields : plsql_ast_with_pos list;
+                          from : plsql_ast_with_pos };;
 
 let parse_semicolon () =
   consume_or_fake ";";;
@@ -26,6 +30,12 @@ let combine_ast_pos start_ast end_ast =
   match start_ast, end_ast with
     | (_, Pos(start_pos, _)), (_, Pos(_, end_pos)) ->
         Pos(start_pos, end_pos);;
+
+let wrap_pos p =
+  get_next_pos >>= fun start_pos ->
+    p >>= fun res ->
+      get_previous_pos >>= fun end_pos ->
+        result (res, Pos(start_pos, end_pos));;
 
 let extract_limits ast_list =
   let rec last list =
@@ -115,7 +125,21 @@ and parse_binary_op_left_assoc ops term_parser =
 
 and parse_expression () =
   let parse_term = parse_binary_op_left_assoc ["*"; "/"] (parse_unary ()) in
-    parse_binary_op_left_assoc ["+"; "-"] parse_term;;
+    parse_binary_op_left_assoc ["+"; "-"] parse_term
+
+and parse_select () =
+  wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
+              parse_from_clause () >>= fun from_clause ->
+                result <| Select { fields = fields; from = from_clause })
+
+and parse_select_fields () =
+  wrap_pos (consume "*" >>= fun _ -> result <| ExprIdentifier("*")) >>= fun res ->
+    result [res]
+
+and parse_from_clause () =
+  wrap_pos (consume "FROM" >>= fun _ ->
+              parse_expression () >>= fun table ->
+                result <| SelectFromClause ([table]));;
 
 let plsql_parser =
   until_eoi <| parse_statement () >>= fun statements ->
@@ -131,3 +155,6 @@ let parse tokens =
 
 let parse_expr tokens =
   run_parser_helper (parse_expression ()) tokens;;
+
+let parse_select_helper tokens =
+  run_parser_helper (parse_select ()) tokens;;

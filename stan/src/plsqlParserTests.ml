@@ -198,20 +198,17 @@ let test_parse_expression_simple_5 () =
   in
     test_parse_expr_helper "1 / 2 + 2 * 3" [] expected
 
-(* let test_parse_select_helper str expected = *)
-(*   let tokens, _ = tokenize str 0 in *)
-(*   let ast, _ = parse_select tokens in *)
-(*     assert_equal expected ast *)
+let test_parse_select_helper = parse_helper parse_select_helper;;
 
-(* let test_parse_simple_select_1 () = *)
-(*   let expected = ({fields = [(ExprIdentifier "*", Pos (7, 7))]; *)
-(*                    from = *)
-(*                       (SelectFromClause [(ExprIdentifier "TABLE", Pos (14, 18))], *)
-(*                        Pos (9, 18))}, *)
-(*                   Pos (0, 18)) *)
-(*   in *)
-(*     test_parse_select_helper "SELECT * FROM table" expected; *)
-(*     test_parse_select_helper "select * from table" expected *)
+let test_parse_simple_select_1 () =
+  let expected = (Select ({fields = [(ExprIdentifier "*", Pos (7, 7))];
+                           from =
+                              (SelectFromClause [(ExprIdentifier "TABLE", Pos (14, 18))],
+                               Pos (9, 18))}),
+                  Pos (0, 18))
+  in
+    test_parse_select_helper "SELECT * FROM table" [] expected;
+    test_parse_select_helper "select * from table" [] expected;;
 
 (* let test_parse_simple_select_2 () = *)
 (*   let expected = ({fields = *)
@@ -305,8 +302,8 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_parse_expression_simple_5" >::
                                    test_parse_expression_simple_5;
 
-                                 (* "test_parse_simple_select_1" >:: *)
-                                 (*   test_parse_simple_select_1; *)
+                                 "test_parse_simple_select_1" >::
+                                   test_parse_simple_select_1;
                                  (* "test_parse_simple_select_2" >:: *)
                                  (*   test_parse_simple_select_2; *)
                                  (* "test_parse_simple_select_3" >:: *)

@@ -3,6 +3,7 @@ open ParserTypes;;
 open Utils;;
 open Pwm;;
 open Lexer;;
+open Printf;;
 
 type plsql_ast =
   | Program of plsql_ast_with_pos list
@@ -15,6 +16,7 @@ type plsql_ast =
   | Select of select_components
   | SelectFromClause of plsql_ast_with_pos list
   | TableAlias of string * plsql_ast_with_pos * plsql_ast_with_pos
+  | ColumnAlias of string * plsql_ast_with_pos * plsql_ast_with_pos
 and plsql_ast_with_pos = plsql_ast * pos
 and select_components = { fields : plsql_ast_with_pos list;
                           from : plsql_ast_with_pos };;
@@ -94,7 +96,7 @@ and parse_identifier () =
   wrap_pos (item >>= fun (Token(content, _)) ->
               result <| ExprIdentifier(content))
 
-and parse_field () =
+and parse_dotted_identifier () =
    parse_binary_op_left_assoc ["."] (parse_identifier ())
 
 and parse_number () =
@@ -105,7 +107,7 @@ and parse_number () =
                 else fail)
 
 and parse_unary () =
-  parse_number () <|> parse_field ()
+  parse_number () <|> parse_dotted_identifier ()
 
 and parse_binary_op_left_assoc ops term_parser =
   let rec bin_op_iter left_term =
@@ -128,7 +130,22 @@ and parse_select () =
                 result <| Select { fields = fields; from = from_clause })
 
 and parse_select_fields () =
-  sep_by (parse_expression ()) (consume ",")
+  let parse_column =
+    parse_expression () >>= fun expr ->
+      lookahead >>= function
+        | Some(Token(tok, _)) when tok <> "FROM" && tok <> "," ->
+            let make_alias alias_connector =
+              parse_identifier () >>= fun alias ->
+                result (ColumnAlias(alias_connector, expr, alias),
+                        combine_ast_pos expr alias)
+            in
+              if tok = "AS"
+              then consume "AS" <+> make_alias "AS"
+              else make_alias ""
+        | _ ->
+            result expr
+  in
+    sep_by parse_column (consume ",")
 
 and parse_from_clause () =
   wrap_pos (consume "FROM" >>= fun _ ->

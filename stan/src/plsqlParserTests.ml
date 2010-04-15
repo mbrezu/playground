@@ -54,7 +54,7 @@ let test_pwm_consume_2 () =
   in
     match result with
       | [warning], None ->
-          assert_equal (Warning ("Expected 'BEGIN' but got 'END'.", 9)) warning
+          assert_equal (Warning ("Expected 'BEGIN' but got 'END'.", 6)) warning
       | _ ->
           assert_failure "Expected a warning.";;
 
@@ -252,6 +252,44 @@ let test_parse_simple_select_4 () =
   in
     test_parse_select_helper "SELECT 1 + 2 FROM dual" [] expected
 
+let test_parse_alias_1 () =
+  let expected = (Select
+                    {fields =
+                        [(ColumnAlias ("AS",
+                                       (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)),
+                                                      (ExprNumLiteral "2", Pos (11, 11))),
+                                        Pos (7, 11)),
+                                       (ExprIdentifier "SUM", Pos (16, 18))),
+                          Pos (7, 18))];
+                     from =
+                        (SelectFromClause
+                           [(TableAlias ("", (ExprIdentifier "DUAL", Pos (25, 28)),
+                                         (ExprIdentifier ";", Pos (29, 29))),
+                             Pos (25, 29))],
+                         Pos (20, 29))},
+                  Pos (0, 29))
+  in
+    test_parse_select_helper "SELECT 1 + 2 as sum FROM dual;" [] expected
+
+let test_parse_alias_2 () =
+  let expected = (Select
+                    {fields =
+                        [(ColumnAlias ("",
+                                       (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)),
+                                                      (ExprNumLiteral "2", Pos (11, 11))),
+                                        Pos (7, 11)),
+                                       (ExprIdentifier "SUM", Pos (13, 15))),
+                          Pos (7, 15))];
+                     from =
+                        (SelectFromClause
+                           [(TableAlias ("", (ExprIdentifier "DUAL", Pos (22, 25)),
+                                         (ExprIdentifier ";", Pos (26, 26))),
+                             Pos (22, 26))],
+                         Pos (17, 26))},
+                  Pos (0, 26))
+  in
+    test_parse_select_helper "SELECT 1 + 2 sum FROM dual;" [] expected
+
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
                                  "test_parse_begin_end" >:: test_parse_begin_end;
@@ -293,6 +331,8 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_simple_select_3;
                                  "test_parse_simple_select_4" >::
                                    test_parse_simple_select_4;
+                                 "test_parse_alias_1" >:: test_parse_alias_1;
+                                 "test_parse_alias_2" >:: test_parse_alias_2;
                                 ]
 
 let _ =

@@ -58,17 +58,14 @@ let get_previous_pos = ParserM (fun (stream, warnings) ->
 
 (* Add a warning, but don't terminate the parser. *)
 let warning warning_message =
-  ParserM (fun (stream, warnings) ->
-             let Stream(last_token, tokens) = stream in
-             let pos = match tokens with
-               | Token(_, Pos(start, _)) :: _ -> start
-               | [] -> (match last_token with
-                          | Some(Token(_, Pos(_, pos))) -> pos + 1
-                          | None -> 0)
-             in
-             let warning = Warning(warning_message, pos) in
-             let new_warnings = warning :: warnings in
-               new_warnings, Some (stream, ()));;
+  let warning_impl pos =
+    ParserM (fun (stream, warnings) ->
+               let warning = Warning(warning_message, pos) in
+               let new_warnings = warning :: warnings in
+                 new_warnings, Some (stream, ()))
+  in
+    get_next_pos >>= fun pos ->
+      warning_impl pos;;
 
 (* Terminate this parser. *)
 let fail =
@@ -126,7 +123,9 @@ let consume_or_fake str =
 (* Parser that returns `true` if there aren't any symbols left in the
    input, `false` otherwise. *)
 let eoi  =
-  lookahead >>= function | Some _ -> result false | None -> result true;;
+  lookahead >>= function
+    | Some(Token _) -> result false
+    | None -> result true;;
 
 (* Applies parser `p` until end of input and collects results in a list. *)
 let until_eoi p =
@@ -141,20 +140,17 @@ let until_eoi p =
 
 (* Parse one token with content `content`. *)
 let consume content =
-  eoi >>= fun eoi ->
-    if not eoi then
-      item >>= fun token ->
-        let Token(token_content, _) = token in
-          if token_content = content
-          then result token
-          else
-            let error_message =
-              sprintf "Expected '%s' but got '%s'." content token_content
-            in
-              error error_message
-    else
-      let error_message = sprintf "Expected '%s' but reached end of input." content in
-        error error_message;;
+  lookahead >>= function
+    | Some(Token(token_content, _)) when token_content = content ->
+        item
+    | Some(Token(token_content, _)) ->
+        let error_message =
+          sprintf "Expected '%s' but got '%s'." content token_content
+        in
+          error error_message
+    | None ->
+        let error_message = sprintf "Expected '%s' but reached end of input." content in
+          error error_message;;
 
 (* A parser that accumulates results of parsing elements with `elm_p`,
 as long as `sep_p` succeeds on whatever is found between the

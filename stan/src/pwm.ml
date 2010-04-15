@@ -156,3 +156,13 @@ let consume content =
       let error_message = sprintf "Expected '%s' but reached end of input." content in
         error error_message;;
 
+(* A parser that accumulates results of parsing elements with `elm_p`,
+as long as `sep_p` succeeds on whatever is found between the
+elements. The list has a minimum of one element. *)
+let sep_by elm_p sep_p =
+  let rec sep_by_iter acc =
+    elm_p >>= fun elm ->
+      (sep_p >>= fun _ -> sep_by_iter (elm :: acc)) <|>
+          result (List.rev (elm :: acc))
+  in
+    sep_by_iter [];;

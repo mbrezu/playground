@@ -14,6 +14,7 @@ type plsql_ast =
   | ExprBinaryOp of string * plsql_ast_with_pos * plsql_ast_with_pos
   | Select of select_components
   | SelectFromClause of plsql_ast_with_pos list
+  | TableAlias of string * plsql_ast_with_pos * plsql_ast_with_pos
 and plsql_ast_with_pos = plsql_ast * pos
 and select_components = { fields : plsql_ast_with_pos list;
                           from : plsql_ast_with_pos };;
@@ -89,12 +90,22 @@ and parse_assignment () =
                 parse_semicolon () >>= fun end_token ->
                   result (StmtAssignment(token_content var_name, expression)))
 
-and parse_unary () =
+and parse_identifier () =
+  wrap_pos (item >>= fun (Token(content, _)) ->
+              result <| ExprIdentifier(content))
+
+and parse_field () =
+   parse_binary_op_left_assoc ["."] (parse_identifier ())
+
+and parse_number () =
   wrap_pos (item >>= fun expr ->
               let content = token_content expr in
                 if (check_all is_digit content)
                 then result (ExprNumLiteral content)
-                else result (ExprIdentifier content))
+                else fail)
+
+and parse_unary () =
+  parse_number () <|> parse_field ()
 
 and parse_binary_op_left_assoc ops term_parser =
   let rec bin_op_iter left_term =
@@ -105,8 +116,7 @@ and parse_binary_op_left_assoc ops term_parser =
                           combine_ast_pos left_term right_term))
       | _ -> result left_term
   in
-    term_parser >>= fun first_term ->
-      bin_op_iter first_term
+    term_parser >>= fun first_term -> bin_op_iter first_term
 
 and parse_expression () =
   let parse_term = parse_binary_op_left_assoc ["*"; "/"] (parse_unary ()) in
@@ -118,13 +128,24 @@ and parse_select () =
                 result <| Select { fields = fields; from = from_clause })
 
 and parse_select_fields () =
-  wrap_pos (consume "*" >>= fun _ -> result <| ExprIdentifier("*")) >>= fun res ->
-    result [res]
+  sep_by (parse_expression ()) (consume ",")
 
 and parse_from_clause () =
   wrap_pos (consume "FROM" >>= fun _ ->
-              parse_expression () >>= fun table ->
-                result <| SelectFromClause ([table]));;
+              parse_table_list () >>= fun tables ->
+                result <| SelectFromClause (tables))
+
+and parse_table_expression () =
+  parse_identifier () >>= fun ident ->
+    lookahead >>= function
+      | Some(Token(tok, _)) when tok <> "," ->
+          (parse_identifier () >>= fun alias ->
+             result (TableAlias("", ident, alias),
+                     combine_ast_pos ident alias))
+      | _ -> result ident
+
+and parse_table_list () =
+  sep_by (parse_table_expression ()) (consume ",")
 
 let plsql_parser =
   until_eoi <| parse_statement () >>= fun statements ->

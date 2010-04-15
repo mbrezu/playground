@@ -210,64 +210,47 @@ let test_parse_simple_select_1 () =
     test_parse_select_helper "SELECT * FROM table" [] expected;
     test_parse_select_helper "select * from table" [] expected;;
 
-(* let test_parse_simple_select_2 () = *)
-(*   let expected = ({fields = *)
-(*                       [(ExprIdentifier "*", Pos (7, 7)); *)
-(*                        (ExprIdentifier "ORDERID", Pos (10, 16))]; *)
-(*                    from = *)
-(*                       (SelectFromClause *)
-(*                          [(ExprIdentifier "TABLE", Pos (23, 27)); *)
-(*                           (ExprIdentifier "ORDERS", Pos (30, 35))], *)
-(*                        Pos (18, 35))}, *)
-(*                   Pos (0, 35)) *)
-(*   in *)
-(*     test_parse_select_helper "SELECT *, OrderId FROM table, orders" expected *)
+let test_parse_simple_select_2 () =
+  let expected = (Select ({fields =
+                              [(ExprIdentifier "*", Pos (7, 7));
+                               (ExprIdentifier "ORDERID", Pos (10, 16))];
+                           from =
+                              (SelectFromClause
+                                 [(ExprIdentifier "TABLE", Pos (23, 27));
+                                  (ExprIdentifier "ORDERS", Pos (30, 35))],
+                               Pos (18, 35))}),
+                  Pos (0, 35))
+  in
+    test_parse_select_helper "SELECT *, OrderId FROM table, orders" [] expected
 
-(* let test_parse_simple_select_3 () = *)
-(*   let expected = ({fields = *)
-(*                       [(ExprBinaryOp (".", *)
-(*                                       (ExprIdentifier "O", Pos (7, 7)), *)
-(*                                       (ExprIdentifier "ORDERID", Pos (9, 15))), *)
-(*                         Pos (7, 15))]; *)
-(*                    from = *)
-(*                       (SelectFromClause *)
-(*                          [(ExprBinaryOp ("as", *)
-(*                                          (ExprIdentifier "ORDERS", Pos (22, 27)), *)
-(*                                          (ExprIdentifier "O", Pos (29, 29))), *)
-(*                            Pos (22, 29))], *)
-(*                        Pos (17, 29))}, *)
-(*                   Pos (0, 29)) *)
-(*   in *)
-(*     test_parse_select_helper "SELECT o.OrderId FROM orders o" expected *)
+let test_parse_simple_select_3 () =
+  let expected = (Select ({fields =
+                              [(ExprBinaryOp (".",
+                                              (ExprIdentifier "O", Pos (7, 7)),
+                                              (ExprIdentifier "ORDERID", Pos (9, 15))),
+                                Pos (7, 15))];
+                           from =
+                              (SelectFromClause
+                                 [(TableAlias ("",
+                                               (ExprIdentifier "ORDERS", Pos (22, 27)),
+                                               (ExprIdentifier "O", Pos (29, 29))),
+                                   Pos (22, 29))],
+                               Pos (17, 29))}),
+                  Pos (0, 29))
+  in
+    test_parse_select_helper "SELECT o.OrderId FROM orders o" [] expected
 
-(* let test_parse_simple_select_4 () = *)
-(*   let expected = ({fields = *)
-(*                       [(ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)), *)
-(*                                       (ExprNumLiteral "2", Pos (11, 11))), *)
-(*                         Pos (7, 11))]; *)
-(*                    from = *)
-(*                       (SelectFromClause [(ExprIdentifier "DUAL", Pos (18, 21))], *)
-(*                        Pos (13, 21))}, *)
-(*                   Pos (0, 21)) *)
-(*   in *)
-(*     test_parse_select_helper "SELECT 1 + 2 FROM dual" expected *)
-
-(* let test_sem () = *)
-(*   let push k = get_state () >>= fun st -> set_state (k :: st) in *)
-(*   let pop () = get_state () >>= fun st -> *)
-(*     match st with *)
-(*       | h :: t -> (set_state t >>= fun _ -> return h) *)
-(*       | [] -> error () in *)
-(*   let swap () = *)
-(*     pop () >>= fun t1 -> *)
-(*       pop () >>= fun t2 -> *)
-(*         push t1 >>= fun _ -> *)
-(*           push t2 *)
-(*   in *)
-(*     assert_equal ([], Some 1) (run (return 1) []); *)
-(*     assert_equal ([1], Some ()) (run (push 1) []); *)
-(*     assert_equal ([], Some 1) (run (push 1 >>= fun _ -> pop ()) []); *)
-(*     assert_equal ([2; 1], Some ()) (run (swap ()) [1; 2]);; *)
+let test_parse_simple_select_4 () =
+  let expected = (Select ({fields =
+                              [(ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)),
+                                              (ExprNumLiteral "2", Pos (11, 11))),
+                                Pos (7, 11))];
+                           from =
+                              (SelectFromClause [(ExprIdentifier "DUAL", Pos (18, 21))],
+                               Pos (13, 21))}),
+                  Pos (0, 21))
+  in
+    test_parse_select_helper "SELECT 1 + 2 FROM dual" [] expected
 
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
@@ -304,13 +287,12 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;
-                                 (* "test_parse_simple_select_2" >:: *)
-                                 (*   test_parse_simple_select_2; *)
-                                 (* "test_parse_simple_select_3" >:: *)
-                                 (*   test_parse_simple_select_3; *)
-                                 (* "test_parse_simple_select_4" >:: *)
-                                 (*   test_parse_simple_select_4; *)
-                                 (* "test_sem" >:: test_sem; *)
+                                 "test_parse_simple_select_2" >::
+                                   test_parse_simple_select_2;
+                                 "test_parse_simple_select_3" >::
+                                   test_parse_simple_select_3;
+                                 "test_parse_simple_select_4" >::
+                                   test_parse_simple_select_4;
                                 ]
 
 let _ =

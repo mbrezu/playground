@@ -73,7 +73,7 @@ and parse_block () =
   in
   let parse_begin_end declarations =
     consume "BEGIN" >>= fun start_token2 ->
-      until (parse_statement ()) "END" >>= fun statements ->
+      until "END" (parse_statement ()) >>= fun statements ->
         consume "END" <+> parse_semicolon () >>= fun _ ->
           result (Block(declarations, statements))
   in
@@ -81,7 +81,7 @@ and parse_block () =
                 match content with
                   | Some(Token("DECLARE", _)) ->
                       (consume "DECLARE" >>= fun start_token ->
-                         until parse_vardecl "BEGIN" >>= fun declarations ->
+                         until "BEGIN" parse_vardecl >>= fun declarations ->
                            parse_begin_end declarations)
                   | _ ->
                       parse_begin_end [])
@@ -145,7 +145,7 @@ and parse_select_fields () =
         | _ ->
             result expr
   in
-    sep_by parse_column (consume ",")
+    sep_by "," parse_column
 
 and parse_from_clause () =
   wrap_pos (consume "FROM" >>= fun _ ->
@@ -162,7 +162,7 @@ and parse_table_expression () =
       | _ -> result ident
 
 and parse_table_list () =
-  sep_by (parse_table_expression ()) (consume ",")
+  sep_by "," (parse_table_expression ())
 
 let plsql_parser =
   until_eoi <| parse_statement () >>= fun statements ->

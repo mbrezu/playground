@@ -2,6 +2,8 @@
 open OUnit;;
 open ParserTypes;;
 open PlsqlParser;;
+open PlsqlParser.Expression;;
+open PlsqlParser.Select;;
 open Lexer;;
 open Pwm;;
 

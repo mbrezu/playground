@@ -19,7 +19,7 @@ type plsql_ast =
   | ColumnAlias of string * plsql_ast_with_pos * plsql_ast_with_pos
 and plsql_ast_with_pos = plsql_ast * pos
 and select_components = { fields : plsql_ast_with_pos list;
-                          from : plsql_ast_with_pos };;
+                          clauses : plsql_ast_with_pos list };;
 
 let parse_semicolon () =
   consume_or_fake ";";;
@@ -127,7 +127,7 @@ and parse_expression () =
 and parse_select () =
   wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
               parse_from_clause () >>= fun from_clause ->
-                result <| Select { fields = fields; from = from_clause })
+                result <| Select { fields = fields; clauses = [from_clause] })
 
 and parse_select_fields () =
   let parse_column =

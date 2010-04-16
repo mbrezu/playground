@@ -202,9 +202,9 @@ let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
   let expected = (Select ({fields = [(ExprIdentifier "*", Pos (7, 7))];
-                           from =
-                              (SelectFromClause [(ExprIdentifier "TABLE", Pos (14, 18))],
-                               Pos (9, 18))}),
+                           clauses =
+                              [SelectFromClause [(ExprIdentifier "TABLE", Pos (14, 18))],
+                               Pos (9, 18)]}),
                   Pos (0, 18))
   in
     test_parse_select_helper "SELECT * FROM table" [] expected;
@@ -214,11 +214,11 @@ let test_parse_simple_select_2 () =
   let expected = (Select ({fields =
                               [(ExprIdentifier "*", Pos (7, 7));
                                (ExprIdentifier "ORDERID", Pos (10, 16))];
-                           from =
-                              (SelectFromClause
+                           clauses =
+                              [SelectFromClause
                                  [(ExprIdentifier "TABLE", Pos (23, 27));
                                   (ExprIdentifier "ORDERS", Pos (30, 35))],
-                               Pos (18, 35))}),
+                               Pos (18, 35)]}),
                   Pos (0, 35))
   in
     test_parse_select_helper "SELECT *, OrderId FROM table, orders" [] expected
@@ -229,13 +229,13 @@ let test_parse_simple_select_3 () =
                                               (ExprIdentifier "O", Pos (7, 7)),
                                               (ExprIdentifier "ORDERID", Pos (9, 15))),
                                 Pos (7, 15))];
-                           from =
-                              (SelectFromClause
+                           clauses =
+                              [SelectFromClause
                                  [(TableAlias ("",
                                                (ExprIdentifier "ORDERS", Pos (22, 27)),
                                                (ExprIdentifier "O", Pos (29, 29))),
                                    Pos (22, 29))],
-                               Pos (17, 29))}),
+                               Pos (17, 29)]}),
                   Pos (0, 29))
   in
     test_parse_select_helper "SELECT o.OrderId FROM orders o" [] expected
@@ -245,9 +245,9 @@ let test_parse_simple_select_4 () =
                               [(ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)),
                                               (ExprNumLiteral "2", Pos (11, 11))),
                                 Pos (7, 11))];
-                           from =
-                              (SelectFromClause [(ExprIdentifier "DUAL", Pos (18, 21))],
-                               Pos (13, 21))}),
+                           clauses =
+                              [SelectFromClause [(ExprIdentifier "DUAL", Pos (18, 21))],
+                               Pos (13, 21)]}),
                   Pos (0, 21))
   in
     test_parse_select_helper "SELECT 1 + 2 FROM dual" [] expected
@@ -261,12 +261,12 @@ let test_parse_alias_1 () =
                                         Pos (7, 11)),
                                        (ExprIdentifier "SUM", Pos (16, 18))),
                           Pos (7, 18))];
-                     from =
-                        (SelectFromClause
+                     clauses =
+                        [SelectFromClause
                            [(TableAlias ("", (ExprIdentifier "DUAL", Pos (25, 28)),
                                          (ExprIdentifier ";", Pos (29, 29))),
                              Pos (25, 29))],
-                         Pos (20, 29))},
+                         Pos (20, 29)]},
                   Pos (0, 29))
   in
     test_parse_select_helper "SELECT 1 + 2 as sum FROM dual;" [] expected
@@ -280,12 +280,12 @@ let test_parse_alias_2 () =
                                         Pos (7, 11)),
                                        (ExprIdentifier "SUM", Pos (13, 15))),
                           Pos (7, 15))];
-                     from =
-                        (SelectFromClause
+                     clauses =
+                        [SelectFromClause
                            [(TableAlias ("", (ExprIdentifier "DUAL", Pos (22, 25)),
                                          (ExprIdentifier ";", Pos (26, 26))),
                              Pos (22, 26))],
-                         Pos (17, 26))},
+                         Pos (17, 26)]},
                   Pos (0, 26))
   in
     test_parse_select_helper "SELECT 1 + 2 sum FROM dual;" [] expected

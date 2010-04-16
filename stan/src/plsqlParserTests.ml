@@ -130,7 +130,7 @@ let test_parse_simple_complete_block_1 () =
     "DECLARE var INTEGER; BEGIN var := 0; END;"
     []
     (Program([(Block ([(VarDecl ("VAR", "INTEGER"), Pos (8, 19))],
-                      [(StmtAssignment ("VAR", (ExprNumLiteral "0", Pos (34, 34))),
+                      [(StmtAssignment ("VAR", (NumericLiteral "0", Pos (34, 34))),
                         Pos (27, 35))]),
                Pos (0, 40))]),
      Pos (0, 40));;
@@ -140,7 +140,7 @@ let test_parse_simple_complete_block_2 () =
     "DECLARE var INTEGER; BEGIN var := a; END;"
     []
     (Program([(Block ([(VarDecl ("VAR", "INTEGER"), Pos (8, 19))],
-                      [(StmtAssignment ("VAR", (ExprIdentifier "A", Pos (34, 34))),
+                      [(StmtAssignment ("VAR", (Identifier "A", Pos (34, 34))),
                         Pos (27, 35))]),
                Pos (0, 40))]),
      Pos(0, 40));;
@@ -148,51 +148,51 @@ let test_parse_simple_complete_block_2 () =
 let test_parse_expr_helper = parse_helper parse_expr;;
 
 let test_parse_expression_simple_1 () =
-  let expected = (ExprBinaryOp("+",
-                               (ExprNumLiteral "1", Pos(0, 0)),
-                               (ExprNumLiteral "2", Pos(4, 4))),
+  let expected = (BinaryOp("+",
+                           (NumericLiteral "1", Pos(0, 0)),
+                           (NumericLiteral "2", Pos(4, 4))),
                   Pos(0, 4)) in
     test_parse_expr_helper "1 + 2" [] expected
 
 let test_parse_expression_simple_2 () =
-  let mul_tree = (ExprBinaryOp ("*",
-                                (ExprNumLiteral "2", Pos(4, 4)),
-                                (ExprNumLiteral "3", Pos(8, 8))),
+  let mul_tree = (BinaryOp ("*",
+                                (NumericLiteral "2", Pos(4, 4)),
+                                (NumericLiteral "3", Pos(8, 8))),
                   Pos(4, 8)) in
-  let expected = (ExprBinaryOp("+",
-                               (ExprNumLiteral "1", Pos(0, 0)),
+  let expected = (BinaryOp("+",
+                               (NumericLiteral "1", Pos(0, 0)),
                                mul_tree),
                   Pos(0, 8)) in
     test_parse_expr_helper "1 + 2 * 3" []expected
 
 let test_parse_expression_simple_3 () =
-  let second_sum = (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (0, 0)),
-                                 (ExprNumLiteral "2", Pos (4, 4))),
+  let second_sum = (BinaryOp ("+", (NumericLiteral "1", Pos (0, 0)),
+                                 (NumericLiteral "2", Pos (4, 4))),
                     Pos (0, 4)) in
-  let expected = (ExprBinaryOp ("+",
+  let expected = (BinaryOp ("+",
                                 second_sum,
-                                (ExprNumLiteral "3", Pos (8, 8))),
+                                (NumericLiteral "3", Pos (8, 8))),
                   Pos (0, 8))
   in
     test_parse_expr_helper "1 + 2 + 3" [] expected
 
 let test_parse_expression_simple_4 () =
-  let expected = (ExprBinaryOp ("-",
-                                (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (0, 0)),
-                                               (ExprNumLiteral "2", Pos (4, 4))),
+  let expected = (BinaryOp ("-",
+                                (BinaryOp ("+", (NumericLiteral "1", Pos (0, 0)),
+                                               (NumericLiteral "2", Pos (4, 4))),
                                  Pos (0, 4)),
-                                (ExprNumLiteral "3", Pos (8, 8))),
+                                (NumericLiteral "3", Pos (8, 8))),
                   Pos (0, 8))
   in
     test_parse_expr_helper "1 + 2 - 3" [] expected
 
 let test_parse_expression_simple_5 () =
-  let expected = (ExprBinaryOp ("+",
-                                (ExprBinaryOp ("/", (ExprNumLiteral "1", Pos (0, 0)),
-                                               (ExprNumLiteral "2", Pos (4, 4))),
+  let expected = (BinaryOp ("+",
+                                (BinaryOp ("/", (NumericLiteral "1", Pos (0, 0)),
+                                               (NumericLiteral "2", Pos (4, 4))),
                                  Pos (0, 4)),
-                                (ExprBinaryOp ("*", (ExprNumLiteral "2", Pos (8, 8)),
-                                               (ExprNumLiteral "3", Pos (12, 12))),
+                                (BinaryOp ("*", (NumericLiteral "2", Pos (8, 8)),
+                                               (NumericLiteral "3", Pos (12, 12))),
                                  Pos (8, 12))),
                   Pos (0, 12))
   in
@@ -201,9 +201,9 @@ let test_parse_expression_simple_5 () =
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
-  let expected = (Select ({fields = [(ExprIdentifier "*", Pos (7, 7))];
+  let expected = (Select ({fields = [(Column (Identifier "*", Pos (7, 7)), Pos(7, 7))];
                            clauses =
-                              [SelectFromClause [(ExprIdentifier "TABLE", Pos (14, 18))],
+                              [SelectFromClause [(TableName "TABLE", Pos (14, 18))],
                                Pos (9, 18)]}),
                   Pos (0, 18))
   in
@@ -212,12 +212,12 @@ let test_parse_simple_select_1 () =
 
 let test_parse_simple_select_2 () =
   let expected = (Select ({fields =
-                              [(ExprIdentifier "*", Pos (7, 7));
-                               (ExprIdentifier "ORDERID", Pos (10, 16))];
+                              [Column (Identifier "*", Pos (7, 7)), Pos(7, 7);
+                               Column (Identifier "ORDERID", Pos (10, 16)), Pos(10, 16)];
                            clauses =
                               [SelectFromClause
-                                 [(ExprIdentifier "TABLE", Pos (23, 27));
-                                  (ExprIdentifier "ORDERS", Pos (30, 35))],
+                                 [(TableName "TABLE", Pos (23, 27));
+                                  (TableName "ORDERS", Pos (30, 35))],
                                Pos (18, 35)]}),
                   Pos (0, 35))
   in
@@ -225,16 +225,13 @@ let test_parse_simple_select_2 () =
 
 let test_parse_simple_select_3 () =
   let expected = (Select ({fields =
-                              [(ExprBinaryOp (".",
-                                              (ExprIdentifier "O", Pos (7, 7)),
-                                              (ExprIdentifier "ORDERID", Pos (9, 15))),
-                                Pos (7, 15))];
+                              [Column (BinaryOp (".",
+                                              (Identifier "O", Pos (7, 7)),
+                                              (Identifier "ORDERID", Pos (9, 15))),
+                                       Pos (7, 15)), Pos(7, 15)];
                            clauses =
                               [SelectFromClause
-                                 [(TableAlias ("",
-                                               (ExprIdentifier "ORDERS", Pos (22, 27)),
-                                               (ExprIdentifier "O", Pos (29, 29))),
-                                   Pos (22, 29))],
+                                 [(TableAlias ("ORDERS", "O"), Pos (22, 29))],
                                Pos (17, 29)]}),
                   Pos (0, 29))
   in
@@ -242,11 +239,12 @@ let test_parse_simple_select_3 () =
 
 let test_parse_simple_select_4 () =
   let expected = (Select ({fields =
-                              [(ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)),
-                                              (ExprNumLiteral "2", Pos (11, 11))),
-                                Pos (7, 11))];
+                              [Column (BinaryOp ("+",
+                                          (NumericLiteral "1", Pos (7, 7)),
+                                          (NumericLiteral "2", Pos (11, 11))),
+                                Pos (7, 11)), Pos(7, 11)];
                            clauses =
-                              [SelectFromClause [(ExprIdentifier "DUAL", Pos (18, 21))],
+                              [SelectFromClause [(TableName "DUAL", Pos (18, 21))],
                                Pos (13, 21)]}),
                   Pos (0, 21))
   in
@@ -256,39 +254,35 @@ let test_parse_alias_1 () =
   let expected = (Select
                     {fields =
                         [(ColumnAlias ("AS",
-                                       (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)),
-                                                      (ExprNumLiteral "2", Pos (11, 11))),
+                                       (BinaryOp ("+", (NumericLiteral "1", Pos (7, 7)),
+                                                      (NumericLiteral "2", Pos (11, 11))),
                                         Pos (7, 11)),
-                                       (ExprIdentifier "SUM", Pos (16, 18))),
+                                       "SUM"),
                           Pos (7, 18))];
                      clauses =
                         [SelectFromClause
-                           [(TableAlias ("", (ExprIdentifier "DUAL", Pos (25, 28)),
-                                         (ExprIdentifier ";", Pos (29, 29))),
-                             Pos (25, 29))],
-                         Pos (20, 29)]},
-                  Pos (0, 29))
+                           [(TableName "DUAL", Pos (25, 28))],
+                         Pos (20, 28)]},
+                  Pos (0, 28))
   in
-    test_parse_select_helper "SELECT 1 + 2 as sum FROM dual;" [] expected
+    test_parse_select_helper "SELECT 1 + 2 as sum FROM dual" [] expected
 
 let test_parse_alias_2 () =
   let expected = (Select
                     {fields =
                         [(ColumnAlias ("",
-                                       (ExprBinaryOp ("+", (ExprNumLiteral "1", Pos (7, 7)),
-                                                      (ExprNumLiteral "2", Pos (11, 11))),
+                                       (BinaryOp ("+", (NumericLiteral "1", Pos (7, 7)),
+                                                      (NumericLiteral "2", Pos (11, 11))),
                                         Pos (7, 11)),
-                                       (ExprIdentifier "SUM", Pos (13, 15))),
+                                       "SUM"),
                           Pos (7, 15))];
                      clauses =
                         [SelectFromClause
-                           [(TableAlias ("", (ExprIdentifier "DUAL", Pos (22, 25)),
-                                         (ExprIdentifier ";", Pos (26, 26))),
-                             Pos (22, 26))],
-                         Pos (17, 26)]},
-                  Pos (0, 26))
+                           [(TableName "DUAL", Pos (22, 25))],
+                         Pos (17, 25)]},
+                  Pos (0, 25))
   in
-    test_parse_select_helper "SELECT 1 + 2 sum FROM dual;" [] expected
+    test_parse_select_helper "SELECT 1 + 2 sum FROM dual" [] expected
 
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;

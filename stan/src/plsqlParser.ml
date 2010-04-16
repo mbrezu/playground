@@ -9,15 +9,19 @@ type plsql_ast =
   | Program of plsql_ast_with_pos list
   | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
   | VarDecl of string * string
-  | StmtAssignment of string * plsql_ast_with_pos
-  | ExprNumLiteral of string
-  | ExprIdentifier of string
-  | ExprBinaryOp of string * plsql_ast_with_pos * plsql_ast_with_pos
+  | StmtAssignment of string * expression_ast_with_pos
   | Select of select_components
   | SelectFromClause of plsql_ast_with_pos list
-  | TableAlias of string * plsql_ast_with_pos * plsql_ast_with_pos
-  | ColumnAlias of string * plsql_ast_with_pos * plsql_ast_with_pos
+  | TableAlias of string * string
+  | TableName of string
+  | Column of expression_ast_with_pos
+  | ColumnAlias of string * expression_ast_with_pos * string
 and plsql_ast_with_pos = plsql_ast * pos
+and expression_ast =
+  | NumericLiteral of string
+  | Identifier of string
+  | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
+and expression_ast_with_pos = expression_ast * pos
 and select_components = { fields : plsql_ast_with_pos list;
                           clauses : plsql_ast_with_pos list };;
 
@@ -28,6 +32,10 @@ let combine_ast_pos start_ast end_ast =
   match start_ast, end_ast with
     | (_, Pos(start_pos, _)), (_, Pos(_, end_pos)) ->
         Pos(start_pos, end_pos);;
+
+let string_item =
+  item >>= fun (Token(item_content, _)) ->
+    result item_content;;
 
 let wrap_pos p =
   get_next_pos >>= fun start_pos ->
@@ -60,6 +68,38 @@ let check_all pred str =
   in
     check_all_iter 0;;
 
+let rec parse_identifier () =
+  wrap_pos (item >>= fun (Token(content, _)) ->
+              result <| Identifier(content))
+
+and parse_dotted_identifier () =
+  parse_binary_op_left_assoc ["."] (parse_identifier ())
+
+and parse_number () =
+  wrap_pos (item >>= fun expr ->
+              let content = token_content expr in
+                if (check_all is_digit content)
+                then result (NumericLiteral content)
+                else fail)
+
+and parse_unary () =
+  parse_number () <|> parse_dotted_identifier ()
+
+and parse_binary_op_left_assoc ops term_parser =
+  let rec bin_op_iter left_term =
+    lookahead >>= function
+      | Some(Token(found_op, _)) when List.mem found_op ops ->
+          (consume found_op <+> term_parser >>= fun right_term ->
+             bin_op_iter (BinaryOp(found_op, left_term, right_term),
+                          combine_ast_pos left_term right_term))
+      | _ -> result left_term
+  in
+    term_parser >>= fun first_term -> bin_op_iter first_term
+
+and parse_expression () =
+  let parse_term = parse_binary_op_left_assoc ["*"; "/"] (parse_unary ()) in
+    parse_binary_op_left_assoc ["+"; "-"] parse_term;;
+
 let rec parse_statement () =
   parse_block () <|> parse_assignment ()
 
@@ -89,40 +129,8 @@ and parse_block () =
 and parse_assignment () =
   wrap_pos (item >>= fun var_name ->
               consume ":" <+> consume "=" <+> parse_expression () >>= fun expression ->
-                parse_semicolon () >>= fun end_token ->
+                parse_semicolon () <+>
                   result (StmtAssignment(token_content var_name, expression)))
-
-and parse_identifier () =
-  wrap_pos (item >>= fun (Token(content, _)) ->
-              result <| ExprIdentifier(content))
-
-and parse_dotted_identifier () =
-   parse_binary_op_left_assoc ["."] (parse_identifier ())
-
-and parse_number () =
-  wrap_pos (item >>= fun expr ->
-              let content = token_content expr in
-                if (check_all is_digit content)
-                then result (ExprNumLiteral content)
-                else fail)
-
-and parse_unary () =
-  parse_number () <|> parse_dotted_identifier ()
-
-and parse_binary_op_left_assoc ops term_parser =
-  let rec bin_op_iter left_term =
-    lookahead >>= function
-      | Some(Token(found_op, _)) when List.mem found_op ops ->
-          (consume found_op <+> term_parser >>= fun right_term ->
-             bin_op_iter (ExprBinaryOp(found_op, left_term, right_term),
-                          combine_ast_pos left_term right_term))
-      | _ -> result left_term
-  in
-    term_parser >>= fun first_term -> bin_op_iter first_term
-
-and parse_expression () =
-  let parse_term = parse_binary_op_left_assoc ["*"; "/"] (parse_unary ()) in
-    parse_binary_op_left_assoc ["+"; "-"] parse_term
 
 and parse_select () =
   wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
@@ -131,19 +139,18 @@ and parse_select () =
 
 and parse_select_fields () =
   let parse_column =
-    parse_expression () >>= fun expr ->
-      lookahead >>= function
-        | Some(Token(tok, _)) when tok <> "FROM" && tok <> "," ->
-            let make_alias alias_connector =
-              parse_identifier () >>= fun alias ->
-                result (ColumnAlias(alias_connector, expr, alias),
-                        combine_ast_pos expr alias)
-            in
-              if tok = "AS"
-              then consume "AS" <+> make_alias "AS"
-              else make_alias ""
-        | _ ->
-            result expr
+    wrap_pos (parse_expression () >>= fun expr ->
+                lookahead >>= function
+                  | Some(Token(tok, _)) when tok <> "FROM" && tok <> "," ->
+                      let make_alias alias_connector =
+                        string_item >>= fun alias ->
+                          result (ColumnAlias(alias_connector, expr, alias))
+                      in
+                        if tok = "AS"
+                        then consume "AS" <+> make_alias "AS"
+                        else make_alias ""
+                  | _ ->
+                      result <| Column(expr))
   in
     sep_by "," parse_column
 
@@ -153,13 +160,13 @@ and parse_from_clause () =
                 result <| SelectFromClause (tables))
 
 and parse_table_expression () =
-  parse_identifier () >>= fun ident ->
-    lookahead >>= function
-      | Some(Token(tok, _)) when tok <> "," ->
-          (parse_identifier () >>= fun alias ->
-             result (TableAlias("", ident, alias),
-                     combine_ast_pos ident alias))
-      | _ -> result ident
+  wrap_pos (string_item >>= fun ident ->
+              string_item >>= fun alias ->
+                if alias <> "," && alias <> ";"
+                then result (TableAlias(ident, alias))
+                else fail)
+  <|>
+      wrap_pos (string_item >>= fun ident -> result <| TableName(ident))
 
 and parse_table_list () =
   sep_by "," (parse_table_expression ())

@@ -48,6 +48,31 @@ let check_all pred str =
   in
     check_all_iter 0;;
 
+let check_sequence seq =
+  lookahead_many (List.length seq) >>= function
+    | Some tokens ->
+        let content = List.map (fun (Token(content, _)) -> content) tokens in
+          result (seq = content)
+    | None ->
+        result false;;
+
+let matching_sequence seqs =
+  let parse_seq seq =
+    check_sequence seq >>= function
+      | true ->
+          (consume_many (List.length seq) >>= fun tokens ->
+             let entire_op =
+               String.concat "" <| List.map (fun (Token(content, _)) -> content) tokens
+             in
+               result entire_op)
+      | false ->
+          fail
+  in
+  let parsers = List.map (fun seq -> parse_seq seq) seqs in
+    (List.fold_left (<|>) (List.hd parsers) (List.tl parsers) >>= fun str ->
+       result <| Some str)
+    <|> result None;;
+
 module Expression :
 sig
   type expression_ast =
@@ -70,7 +95,7 @@ struct
                 result <| Identifier(content))
 
   and parse_dotted_identifier () =
-    parse_binary_op_left_assoc ["."] (parse_identifier ())
+    parse_binary_op_left_assoc [["."]] (parse_identifier ())
 
   and parse_number () =
     wrap_pos (item >>= fun expr ->
@@ -84,18 +109,19 @@ struct
 
   and parse_binary_op_left_assoc ops term_parser =
     let rec bin_op_iter left_term =
-      lookahead >>= function
-        | Some(Token(found_op, _)) when List.mem found_op ops ->
-            (consume found_op <+> term_parser >>= fun right_term ->
+      matching_sequence ops >>= function
+        | Some found_op ->
+            (term_parser >>= fun right_term ->
                bin_op_iter (BinaryOp(found_op, left_term, right_term),
                             combine_ast_pos left_term right_term))
-        | _ -> result left_term
+        | None -> result left_term
     in
       term_parser >>= fun first_term -> bin_op_iter first_term
 
   and parse_expression () =
-    let parse_term = parse_binary_op_left_assoc ["*"; "/"] (parse_unary ()) in
-      parse_binary_op_left_assoc ["+"; "-"] parse_term;;
+    let parse_term = parse_binary_op_left_assoc [["*"]; ["/"]] (parse_unary ()) in
+    let parse_arithmetic = parse_binary_op_left_assoc [["+"]; ["-"]] parse_term in
+      parse_binary_op_left_assoc [["<"]] parse_arithmetic;;
 
   let parse_expression = parse_expression ();;
 end;;
@@ -106,7 +132,8 @@ module Select :
 sig
   type select_ast =
     | Select of select_components
-    | SelectFromClause of select_ast_with_pos list
+    | FromClause of select_ast_with_pos list
+    | WhereClause of expression_ast_with_pos
     | TableAlias of string * string
     | TableName of string
     | Column of expression_ast_with_pos
@@ -120,7 +147,8 @@ end =
 struct
   type select_ast =
     | Select of select_components
-    | SelectFromClause of select_ast_with_pos list
+    | FromClause of select_ast_with_pos list
+    | WhereClause of expression_ast_with_pos
     | TableAlias of string * string
     | TableName of string
     | Column of expression_ast_with_pos
@@ -132,7 +160,20 @@ struct
   let rec parse_select () =
     wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
                 parse_from_clause () >>= fun from_clause ->
-                  result <| Select { fields = fields; clauses = [from_clause] })
+                  parse_where_clause () >>= function
+                    | Some where_clause ->
+                        result <| Select { fields = fields; clauses = [from_clause;
+                                                                       where_clause] }
+                    | None ->
+                        result <| Select { fields = fields; clauses = [from_clause] })
+
+  and parse_where_clause () =
+    lookahead >>= function
+      | Some (Token("WHERE",_)) ->
+          (wrap_pos (consume "WHERE" <+> parse_expression >>= fun expr ->
+                       result <| WhereClause(expr)) >>= fun where_clause ->
+             result <| Some where_clause)
+      | _ -> result None
 
   and parse_select_fields () =
     let parse_column =
@@ -154,12 +195,12 @@ struct
   and parse_from_clause () =
     wrap_pos (consume "FROM" >>= fun _ ->
                 parse_table_list () >>= fun tables ->
-                  result <| SelectFromClause (tables))
+                  result <| FromClause (tables))
 
   and parse_table_expression () =
     wrap_pos (string_item >>= fun ident ->
                 string_item >>= fun alias ->
-                  if alias <> "," && alias <> ";"
+                  if alias <> "," && alias <> ";" && alias <> "WHERE"
                   then result (TableAlias(ident, alias))
                   else fail)
     <|>

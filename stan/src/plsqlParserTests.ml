@@ -205,7 +205,7 @@ let test_parse_select_helper = parse_helper parse_select_helper;;
 let test_parse_simple_select_1 () =
   let expected = (Select ({fields = [(Column (Identifier "*", Pos (7, 7)), Pos(7, 7))];
                            clauses =
-                              [SelectFromClause [(TableName "TABLE", Pos (14, 18))],
+                              [FromClause [(TableName "TABLE", Pos (14, 18))],
                                Pos (9, 18)]}),
                   Pos (0, 18))
   in
@@ -217,7 +217,7 @@ let test_parse_simple_select_2 () =
                               [Column (Identifier "*", Pos (7, 7)), Pos(7, 7);
                                Column (Identifier "ORDERID", Pos (10, 16)), Pos(10, 16)];
                            clauses =
-                              [SelectFromClause
+                              [FromClause
                                  [(TableName "TABLE", Pos (23, 27));
                                   (TableName "ORDERS", Pos (30, 35))],
                                Pos (18, 35)]}),
@@ -232,7 +232,7 @@ let test_parse_simple_select_3 () =
                                               (Identifier "ORDERID", Pos (9, 15))),
                                        Pos (7, 15)), Pos(7, 15)];
                            clauses =
-                              [SelectFromClause
+                              [FromClause
                                  [(TableAlias ("ORDERS", "O"), Pos (22, 29))],
                                Pos (17, 29)]}),
                   Pos (0, 29))
@@ -246,7 +246,7 @@ let test_parse_simple_select_4 () =
                                           (NumericLiteral "2", Pos (11, 11))),
                                 Pos (7, 11)), Pos(7, 11)];
                            clauses =
-                              [SelectFromClause [(TableName "DUAL", Pos (18, 21))],
+                              [FromClause [(TableName "DUAL", Pos (18, 21))],
                                Pos (13, 21)]}),
                   Pos (0, 21))
   in
@@ -262,7 +262,7 @@ let test_parse_alias_1 () =
                                        "SUM"),
                           Pos (7, 18))];
                      clauses =
-                        [SelectFromClause
+                        [FromClause
                            [(TableName "DUAL", Pos (25, 28))],
                          Pos (20, 28)]},
                   Pos (0, 28))
@@ -279,12 +279,33 @@ let test_parse_alias_2 () =
                                        "SUM"),
                           Pos (7, 15))];
                      clauses =
-                        [SelectFromClause
+                        [FromClause
                            [(TableName "DUAL", Pos (22, 25))],
                          Pos (17, 25)]},
                   Pos (0, 25))
   in
     test_parse_select_helper "SELECT 1 + 2 sum FROM dual" [] expected
+
+let test_parse_where_1 () =
+  let expected = (Select
+                    {fields =
+                        [(Column (Identifier "AUTHOR", Pos (7, 12)), Pos (7, 12));
+                         (Column (Identifier "TITLE", Pos (15, 19)), Pos (15, 19));
+                         (Column (Identifier "PRICE", Pos (22, 26)), Pos (22, 26))];
+                     clauses =
+                        [(FromClause [(TableName "TABLE", Pos (33, 37))], Pos (28, 37));
+                         (WhereClause
+                            (BinaryOp ("<",
+                                       (Identifier "PRICE", Pos (45, 49)),
+                                       (NumericLiteral "100", Pos (53, 55))),
+                             Pos (45, 55)),
+                          Pos (39, 55))]},
+                  Pos (0, 55))
+  in
+    test_parse_select_helper
+      "SELECT Author, Title, Price FROM Table WHERE Price < 100"
+      []
+      expected
 
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
@@ -329,6 +350,7 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_simple_select_4;
                                  "test_parse_alias_1" >:: test_parse_alias_1;
                                  "test_parse_alias_2" >:: test_parse_alias_2;
+                                 "test_parse_where_1" >:: test_parse_where_1;
                                 ]
 
 let _ =

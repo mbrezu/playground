@@ -90,6 +90,28 @@ let lookahead =
                  | hd :: tl -> warnings, Some (stream, Some(hd))
                  | [] -> warnings, Some (stream, None));;
 
+(* Consume `n` items, returns a list of them. Fails if there are not
+   enough items in the steram. *)
+let consume_many n =
+  let rec cm_iter n acc =
+    if n = 0 then result <| List.rev acc
+    else (item >>= fun tok -> cm_iter (n - 1) (tok :: acc))
+  in
+    cm_iter n [];;
+
+(* Lookahead many items. Like consume_many, but doesn't consume the input. *)
+let lookahead_many n =
+  let rec take n seq =
+    if n = 0 || seq = []
+    then []
+    else (List.hd seq) :: (take (n - 1) (List.tl seq))
+  in
+    ParserM (fun (stream, warnings) ->
+               let Stream(_, tokens) = stream in
+                 if List.length tokens >= n
+                 then warnings, Some (stream, Some(take n tokens))
+                 else warnings, Some (stream, None));;
+
 (* Parse using `p` until next token has value `next`. *)
 let until next p =
   let rec until_impl acc =

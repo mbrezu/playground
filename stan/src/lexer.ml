@@ -29,6 +29,9 @@ let tokenize str start_pos =
         if is_letter firstChar then
           let parsed, new_pos = lex_while str start_pos is_alnum in
             tokenize' str new_pos (parsed :: acc)
+        else if is_digit firstChar then
+          let parsed, new_pos = lex_while str start_pos is_digit in
+            tokenize' str new_pos (parsed :: acc)
         else if is_ws firstChar then
           tokenize' str (start_pos + 1) acc
         else

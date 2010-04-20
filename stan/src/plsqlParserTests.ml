@@ -27,6 +27,14 @@ let test_lex_simple_select () =
      Token ("TESTTABLE", Pos (19, 27));
      Token (";", Pos (28, 28))];;
 
+let test_lex_string_literal () =
+  test_lex_helper
+    "\'Test\' 1 \'\'\'Test2\'\'\' \'Test3"
+    [Token ("'Test'", Pos (0, 5));
+     Token ("1", Pos (7, 7));
+     Token ("'''Test2'''", Pos (9, 19));
+     Token ("'Test3", Pos (21, 26))];;
+
 let test_pwm_lookahead () =
   let tokens, _ = tokenize "" 0 in
   let result = run_parser_helper lookahead tokens in
@@ -419,7 +427,7 @@ let test_parse_where_2 () =
 
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
-                                 "test_parse_begin_end" >:: test_parse_begin_end;
+                                 "test_lex_string_literal" >:: test_lex_string_literal;
 
                                  "test_pwm_lookahead" >:: test_pwm_lookahead;
                                  "test_pwm_eoi" >:: test_pwm_eoi;
@@ -428,6 +436,7 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_pwm_until_eoi" >:: test_pwm_until_eoi;
                                  "test_pwm_consume_or_fake" >:: test_pwm_consume_or_fake;
 
+                                 "test_parse_begin_end" >:: test_parse_begin_end;
                                  "test_parse_declare_begin_end" >::
                                    test_parse_declare_begin_end;
                                  "test_parse_empty_block_with_decl" >::

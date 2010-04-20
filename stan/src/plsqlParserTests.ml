@@ -200,6 +200,87 @@ let test_parse_expression_simple_5 () =
   in
     test_parse_expr_helper "1 / 2 + 2 * 3" [] expected
 
+let test_parse_expression_logical_1 () =
+  let expected = (BinaryOp ("OR",
+                            (BinaryOp ("<",
+                                       (NumericLiteral "1", Pos (0, 0)),
+                                       (NumericLiteral "2", Pos (4, 4))),
+                             Pos (0, 4)),
+                            (BinaryOp ("AND",
+                                       (BinaryOp (">",
+                                                  (BinaryOp ("+",
+                                                             (NumericLiteral "2",
+                                                              Pos (9, 9)),
+                                                             (NumericLiteral "2",
+                                                              Pos (13, 13))),
+                                                   Pos (9, 13)),
+                                                  (NumericLiteral "3", Pos (17, 17))),
+                                        Pos (9, 17)),
+                                       (BinaryOp ("<",
+                                                  (NumericLiteral "2", Pos (23, 23)),
+                                                  (NumericLiteral "3", Pos (27, 27))),
+                                        Pos (23, 27))),
+                             Pos (9, 27))),
+                  Pos (0, 27))
+  in
+    test_parse_expr_helper "1 < 2 OR 2 + 2 > 3 AND 2 < 3" [] expected
+
+let test_parse_expression_logical_2 () =
+  let expected = (BinaryOp ("OR",
+                            (BinaryOp ("<",
+                                       (NumericLiteral "1", Pos (0, 0)),
+                                       (NumericLiteral "2", Pos (4, 4))),
+                             Pos (0, 4)),
+                            (BinaryOp ("AND",
+                                       (UnaryOp ("NOT",
+                                                 (BinaryOp ("<",
+                                                            (BinaryOp ("+",
+                                                                       (NumericLiteral "2",
+                                                                        Pos (13, 13)),
+                                                                       (NumericLiteral "2",
+                                                                        Pos (17, 17))),
+                                                             Pos (13, 17)),
+                                                            (NumericLiteral "3",
+                                                             Pos (21, 21))),
+                                                  Pos (13, 21))),
+                                        Pos (9, 21)),
+                                       (BinaryOp ("<",
+                                                  (NumericLiteral "2", Pos (27, 27)),
+                                                  (NumericLiteral "3", Pos (31, 31))),
+                                        Pos (27, 31))),
+                             Pos (9, 31))),
+                  Pos (0, 31))
+  in
+    test_parse_expr_helper "1 < 2 OR NOT 2 + 2 < 3 AND 2 < 3" [] expected
+
+let test_parse_expression_logical_3 () =
+  let expected = (BinaryOp ("OR",
+                            (BinaryOp ("=",
+                                       (NumericLiteral "1", Pos (0, 0)),
+                                       (NumericLiteral "2", Pos (4, 4))),
+                             Pos (0, 4)),
+                            (BinaryOp ("AND",
+                                       (UnaryOp ("NOT",
+                                                 (BinaryOp ("<>",
+                                                            (BinaryOp ("+",
+                                                                       (NumericLiteral "2",
+                                                                        Pos (13, 13)),
+                                                                       (NumericLiteral "2",
+                                                                        Pos (17, 17))),
+                                                             Pos (13, 17)),
+                                                            (NumericLiteral "3",
+                                                             Pos (22, 22))),
+                                                  Pos (13, 22))),
+                                        Pos (9, 22)),
+                                       (BinaryOp ("<",
+                                                  (NumericLiteral "2", Pos (28, 28)),
+                                                  (NumericLiteral "3", Pos (32, 32))),
+                                        Pos (28, 32))),
+                             Pos (9, 32))),
+                  Pos (0, 32))
+  in
+    test_parse_expr_helper "1 = 2 OR NOT 2 + 2 <> 3 AND 2 < 3" [] expected
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -307,6 +388,35 @@ let test_parse_where_1 () =
       []
       expected
 
+let test_parse_where_2 () =
+  let expected =    (Select
+                       {fields =
+                           [(Column (Identifier "AUTHOR", Pos (7, 12)), Pos (7, 12));
+                            (Column (Identifier "TITLE", Pos (15, 19)), Pos (15, 19));
+                            (Column (Identifier "PRICE", Pos (22, 26)), Pos (22, 26))];
+                        clauses =
+                           [(FromClause
+                               [(TableName "TABLE", Pos (33, 37))],
+                             Pos (28, 37));
+                            (WhereClause
+                               (BinaryOp ("AND",
+                                          (BinaryOp (">=",
+                                                     (Identifier "PRICE", Pos (45, 49)),
+                                                     (NumericLiteral "10", Pos (54, 55))),
+                                           Pos (45, 55)),
+                                          (BinaryOp ("<=",
+                                                     (Identifier "PRICE", Pos (61, 65)),
+                                                     (NumericLiteral "100", Pos (70, 72))),
+                                           Pos (61, 72))),
+                                Pos (45, 72)),
+                             Pos (39, 72))]},
+                     Pos (0, 72))
+  in
+    test_parse_select_helper
+      "SELECT Author, Title, Price FROM Table WHERE Price >= 10 AND Price <= 100"
+      []
+      expected
+
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
                                  "test_parse_begin_end" >:: test_parse_begin_end;
@@ -339,6 +449,12 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_simple_4;
                                  "test_parse_expression_simple_5" >::
                                    test_parse_expression_simple_5;
+                                 "test_parse_expression_logical_1" >::
+                                   test_parse_expression_logical_1;
+                                 "test_parse_expression_logical_2" >::
+                                   test_parse_expression_logical_2;
+                                 "test_parse_expression_logical_3" >::
+                                   test_parse_expression_logical_3;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;
@@ -351,6 +467,7 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_parse_alias_1" >:: test_parse_alias_1;
                                  "test_parse_alias_2" >:: test_parse_alias_2;
                                  "test_parse_where_1" >:: test_parse_where_1;
+                                 "test_parse_where_2" >:: test_parse_where_2;
                                 ]
 
 let _ =

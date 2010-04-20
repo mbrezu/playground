@@ -79,6 +79,7 @@ sig
     | NumericLiteral of string
     | Identifier of string
     | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
+    | UnaryOp of string * expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos;;
 
   val parse_expression : (token, expression_ast_with_pos) parser;;
@@ -88,6 +89,7 @@ struct
     | NumericLiteral of string
     | Identifier of string
     | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
+    | UnaryOp of string * expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos;;
 
   let rec parse_identifier () =
@@ -118,10 +120,21 @@ struct
     in
       term_parser >>= fun first_term -> bin_op_iter first_term
 
+  and parse_maybe_unary unary_op term_parser =
+    lookahead >>= function
+      | Some(Token(content, _)) when content = unary_op ->
+          wrap_pos (consume unary_op <+> term_parser >>= fun expr ->
+                      result <| UnaryOp(unary_op, expr))
+      | _ -> term_parser
+
   and parse_expression () =
     let parse_term = parse_binary_op_left_assoc [["*"]; ["/"]] (parse_unary ()) in
     let parse_arithmetic = parse_binary_op_left_assoc [["+"]; ["-"]] parse_term in
-      parse_binary_op_left_assoc [["<"]] parse_arithmetic;;
+    let rel_ops = [["<"; "="]; [">"; "="]; ["<"; ">"]; ["<"]; [">"]; ["="]] in
+    let parse_relational = parse_binary_op_left_assoc rel_ops  parse_arithmetic in
+    let parse_logical_factor = parse_maybe_unary "NOT" parse_relational in
+    let parse_logical_term = parse_binary_op_left_assoc [["AND"]] parse_logical_factor in
+      parse_binary_op_left_assoc [["OR"]] parse_logical_term;;
 
   let parse_expression = parse_expression ();;
 end;;

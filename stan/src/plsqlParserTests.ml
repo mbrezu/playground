@@ -491,6 +491,29 @@ in
     []
     expected
 
+let test_parse_group_by_1 () =
+  let expected = (Select
+     {fields =
+       [(Column (Identifier "PRODUCT", Pos (7, 13)), Pos (7, 13));
+        (Column (Identifier "PRICE", Pos (16, 20)), Pos (16, 20))];
+      clauses =
+       [(FromClause [(TableName "TABLE", Pos (27, 31))], Pos (22, 31));
+        (WhereClause
+          (BinaryOp (">=",
+            (Identifier "PRICE", Pos (39, 43)),
+            (NumericLiteral "10", Pos (48, 49))),
+           Pos (39, 49)),
+         Pos (33, 49));
+        (GroupByClause
+           [(Identifier "PRODUCT", Pos (60, 66)); (Identifier "PRICE", Pos (69, 73))],
+         Pos (51, 73))]},
+    Pos (0, 73))
+in
+  test_parse_select_helper
+    "SELECT Product, Price FROM Table WHERE Price >= 10 GROUP BY Product, Price"
+    []
+    expected
+
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
                                  "test_lex_string_literal" >:: test_lex_string_literal;
@@ -546,6 +569,7 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_parse_order_by_1" >:: test_parse_order_by_1;
                                  "test_parse_order_by_2" >:: test_parse_order_by_2;
                                  "test_parse_order_by_3" >:: test_parse_order_by_3;
+                                 "test_parse_group_by_1" >:: test_parse_group_by_1;
                                 ]
 
 let _ =

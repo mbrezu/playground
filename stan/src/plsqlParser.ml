@@ -147,6 +147,7 @@ sig
     | Select of select_components
     | FromClause of select_ast_with_pos list
     | WhereClause of expression_ast_with_pos
+    | GroupByClause of expression_ast_with_pos list
     | OrderByClause of expression_ast_with_pos * string
     | TableAlias of string * string
     | TableName of string
@@ -163,6 +164,7 @@ struct
     | Select of select_components
     | FromClause of select_ast_with_pos list
     | WhereClause of expression_ast_with_pos
+    | GroupByClause of expression_ast_with_pos list
     | OrderByClause of expression_ast_with_pos * string
     | TableAlias of string * string
     | TableName of string
@@ -179,12 +181,22 @@ struct
     wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
                 parse_from_clause () >>= fun from_clause ->
                   parse_where_clause () >>= function maybe_where_clause ->
-                    parse_order_by_clause () >>= function maybe_order_by_clause ->
-                      let raw_clause_list = [Some from_clause;
-                                             maybe_where_clause;
-                                             maybe_order_by_clause] in
-                      let clause_list = filter_maybe raw_clause_list in
-                        result <| Select { fields = fields; clauses = clause_list })
+                    parse_group_by_clause () >>= function maybe_group_by_clause ->
+                      parse_order_by_clause () >>= function maybe_order_by_clause ->
+                        let raw_clause_list = [Some from_clause;
+                                               maybe_where_clause;
+                                               maybe_group_by_clause;
+                                               maybe_order_by_clause] in
+                        let clause_list = filter_maybe raw_clause_list in
+                          result <| Select { fields = fields; clauses = clause_list })
+
+  and parse_group_by_clause () =
+    lookahead_many 2 >>= function
+      | Some [Token("GROUP", _); Token("BY", _)] ->
+          (wrap_pos (consume_many 2 <+> sep_by "," parse_expression >>= fun exprs ->
+                       result <| GroupByClause(exprs)) >>= fun group_by_clause ->
+             result <| Some group_by_clause)
+      | _ -> result None
 
   and parse_order_by_clause () =
     lookahead_many 2 >>= function

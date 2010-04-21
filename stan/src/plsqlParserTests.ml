@@ -166,44 +166,44 @@ let test_parse_expression_simple_1 () =
 
 let test_parse_expression_simple_2 () =
   let mul_tree = (BinaryOp ("*",
-                                (NumericLiteral "2", Pos(4, 4)),
-                                (NumericLiteral "3", Pos(8, 8))),
+                            (NumericLiteral "2", Pos(4, 4)),
+                            (NumericLiteral "3", Pos(8, 8))),
                   Pos(4, 8)) in
   let expected = (BinaryOp("+",
-                               (NumericLiteral "1", Pos(0, 0)),
-                               mul_tree),
+                           (NumericLiteral "1", Pos(0, 0)),
+                           mul_tree),
                   Pos(0, 8)) in
     test_parse_expr_helper "1 + 2 * 3" []expected
 
 let test_parse_expression_simple_3 () =
   let second_sum = (BinaryOp ("+", (NumericLiteral "1", Pos (0, 0)),
-                                 (NumericLiteral "2", Pos (4, 4))),
+                              (NumericLiteral "2", Pos (4, 4))),
                     Pos (0, 4)) in
   let expected = (BinaryOp ("+",
-                                second_sum,
-                                (NumericLiteral "3", Pos (8, 8))),
+                            second_sum,
+                            (NumericLiteral "3", Pos (8, 8))),
                   Pos (0, 8))
   in
     test_parse_expr_helper "1 + 2 + 3" [] expected
 
 let test_parse_expression_simple_4 () =
   let expected = (BinaryOp ("-",
-                                (BinaryOp ("+", (NumericLiteral "1", Pos (0, 0)),
-                                               (NumericLiteral "2", Pos (4, 4))),
-                                 Pos (0, 4)),
-                                (NumericLiteral "3", Pos (8, 8))),
+                            (BinaryOp ("+", (NumericLiteral "1", Pos (0, 0)),
+                                       (NumericLiteral "2", Pos (4, 4))),
+                             Pos (0, 4)),
+                            (NumericLiteral "3", Pos (8, 8))),
                   Pos (0, 8))
   in
     test_parse_expr_helper "1 + 2 - 3" [] expected
 
 let test_parse_expression_simple_5 () =
   let expected = (BinaryOp ("+",
-                                (BinaryOp ("/", (NumericLiteral "1", Pos (0, 0)),
-                                               (NumericLiteral "2", Pos (4, 4))),
-                                 Pos (0, 4)),
-                                (BinaryOp ("*", (NumericLiteral "2", Pos (8, 8)),
-                                               (NumericLiteral "3", Pos (12, 12))),
-                                 Pos (8, 12))),
+                            (BinaryOp ("/", (NumericLiteral "1", Pos (0, 0)),
+                                       (NumericLiteral "2", Pos (4, 4))),
+                             Pos (0, 4)),
+                            (BinaryOp ("*", (NumericLiteral "2", Pos (8, 8)),
+                                       (NumericLiteral "3", Pos (12, 12))),
+                             Pos (8, 12))),
                   Pos (0, 12))
   in
     test_parse_expr_helper "1 / 2 + 2 * 3" [] expected
@@ -317,8 +317,8 @@ let test_parse_simple_select_2 () =
 let test_parse_simple_select_3 () =
   let expected = (Select ({fields =
                               [Column (BinaryOp (".",
-                                              (Identifier "O", Pos (7, 7)),
-                                              (Identifier "ORDERID", Pos (9, 15))),
+                                                 (Identifier "O", Pos (7, 7)),
+                                                 (Identifier "ORDERID", Pos (9, 15))),
                                        Pos (7, 15)), Pos(7, 15)];
                            clauses =
                               [FromClause
@@ -331,9 +331,9 @@ let test_parse_simple_select_3 () =
 let test_parse_simple_select_4 () =
   let expected = (Select ({fields =
                               [Column (BinaryOp ("+",
-                                          (NumericLiteral "1", Pos (7, 7)),
-                                          (NumericLiteral "2", Pos (11, 11))),
-                                Pos (7, 11)), Pos(7, 11)];
+                                                 (NumericLiteral "1", Pos (7, 7)),
+                                                 (NumericLiteral "2", Pos (11, 11))),
+                                       Pos (7, 11)), Pos(7, 11)];
                            clauses =
                               [FromClause [(TableName "DUAL", Pos (18, 21))],
                                Pos (13, 21)]}),
@@ -346,7 +346,7 @@ let test_parse_alias_1 () =
                     {fields =
                         [(ColumnAlias ("AS",
                                        (BinaryOp ("+", (NumericLiteral "1", Pos (7, 7)),
-                                                      (NumericLiteral "2", Pos (11, 11))),
+                                                  (NumericLiteral "2", Pos (11, 11))),
                                         Pos (7, 11)),
                                        "SUM"),
                           Pos (7, 18))];
@@ -363,7 +363,7 @@ let test_parse_alias_2 () =
                     {fields =
                         [(ColumnAlias ("",
                                        (BinaryOp ("+", (NumericLiteral "1", Pos (7, 7)),
-                                                      (NumericLiteral "2", Pos (11, 11))),
+                                                  (NumericLiteral "2", Pos (11, 11))),
                                         Pos (7, 11)),
                                        "SUM"),
                           Pos (7, 15))];
@@ -397,33 +397,99 @@ let test_parse_where_1 () =
       expected
 
 let test_parse_where_2 () =
-  let expected =    (Select
-                       {fields =
-                           [(Column (Identifier "AUTHOR", Pos (7, 12)), Pos (7, 12));
-                            (Column (Identifier "TITLE", Pos (15, 19)), Pos (15, 19));
-                            (Column (Identifier "PRICE", Pos (22, 26)), Pos (22, 26))];
-                        clauses =
-                           [(FromClause
-                               [(TableName "TABLE", Pos (33, 37))],
-                             Pos (28, 37));
-                            (WhereClause
-                               (BinaryOp ("AND",
-                                          (BinaryOp (">=",
-                                                     (Identifier "PRICE", Pos (45, 49)),
-                                                     (NumericLiteral "10", Pos (54, 55))),
-                                           Pos (45, 55)),
-                                          (BinaryOp ("<=",
-                                                     (Identifier "PRICE", Pos (61, 65)),
-                                                     (NumericLiteral "100", Pos (70, 72))),
-                                           Pos (61, 72))),
-                                Pos (45, 72)),
-                             Pos (39, 72))]},
-                     Pos (0, 72))
+  let expected = (Select
+                    {fields =
+                        [(Column (Identifier "AUTHOR", Pos (7, 12)), Pos (7, 12));
+                         (Column (Identifier "TITLE", Pos (15, 19)), Pos (15, 19));
+                         (Column (Identifier "PRICE", Pos (22, 26)), Pos (22, 26))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "TABLE", Pos (33, 37))],
+                          Pos (28, 37));
+                         (WhereClause
+                            (BinaryOp ("AND",
+                                       (BinaryOp (">=",
+                                                  (Identifier "PRICE", Pos (45, 49)),
+                                                  (NumericLiteral "10", Pos (54, 55))),
+                                        Pos (45, 55)),
+                                       (BinaryOp ("<=",
+                                                  (Identifier "PRICE", Pos (61, 65)),
+                                                  (NumericLiteral "100", Pos (70, 72))),
+                                        Pos (61, 72))),
+                             Pos (45, 72)),
+                          Pos (39, 72))]},
+                  Pos (0, 72))
   in
     test_parse_select_helper
       "SELECT Author, Title, Price FROM Table WHERE Price >= 10 AND Price <= 100"
       []
       expected
+
+let test_parse_order_by_1 () =
+  let expected = (Select
+                    {fields =
+                        [(Column (Identifier "*", Pos (7, 7)), Pos (7, 7))];
+                     clauses =
+                        [(FromClause [(TableName "TABLE", Pos (14, 18))], Pos (9, 18));
+                         (WhereClause
+                            (BinaryOp (">=",
+                                       (Identifier "PRICE", Pos (26, 30)),
+                                       (NumericLiteral "10", Pos (35, 36))),
+                             Pos (26, 36)),
+                          Pos (20, 36));
+                         (OrderByClause
+                            ((Identifier "COST", Pos (47, 50)), "ASC"),
+                          Pos (38, 54))]},
+                  Pos (0, 54))
+  in
+    test_parse_select_helper
+      "SELECT * FROM Table WHERE Price >= 10 ORDER BY Cost ASC"
+      []
+      expected
+
+let test_parse_order_by_2 () =
+  let expected = (Select
+                    {fields =
+                        [(Column (Identifier "*", Pos (7, 7)), Pos (7, 7))];
+                     clauses =
+                        [(FromClause [(TableName "TABLE", Pos (14, 18))], Pos (9, 18));
+                         (WhereClause
+                            (BinaryOp (">=",
+                                       (Identifier "PRICE", Pos (26, 30)),
+                                       (NumericLiteral "10", Pos (35, 36))),
+                             Pos (26, 36)),
+                          Pos (20, 36));
+                         (OrderByClause
+                            ((Identifier "COST", Pos (47, 50)), ""),
+                          Pos (38, 50))]},
+                  Pos (0, 50))
+  in
+    test_parse_select_helper
+      "SELECT * FROM Table WHERE Price >= 10 ORDER BY Cost"
+      []
+      expected
+
+let test_parse_order_by_3 () =
+  let expected = (Select
+                    {fields =
+                        [(Column (Identifier "*", Pos (7, 7)), Pos (7, 7))];
+                     clauses =
+                        [(FromClause [(TableName "TABLE", Pos (14, 18))], Pos (9, 18));
+                         (WhereClause
+                            (BinaryOp (">=",
+                                       (Identifier "PRICE", Pos (26, 30)),
+                                       (NumericLiteral "10", Pos (35, 36))),
+                             Pos (26, 36)),
+                          Pos (20, 36));
+                         (OrderByClause
+                            ((Identifier "COST", Pos (47, 50)), "DESC"),
+                          Pos (38, 55))]},
+                  Pos (0, 55))
+in
+  test_parse_select_helper
+    "SELECT * FROM Table WHERE Price >= 10 ORDER BY Cost DESC"
+    []
+    expected
 
 let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_lex_simple_select" >:: test_lex_simple_select;
@@ -477,6 +543,9 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                  "test_parse_alias_2" >:: test_parse_alias_2;
                                  "test_parse_where_1" >:: test_parse_where_1;
                                  "test_parse_where_2" >:: test_parse_where_2;
+                                 "test_parse_order_by_1" >:: test_parse_order_by_1;
+                                 "test_parse_order_by_2" >:: test_parse_order_by_2;
+                                 "test_parse_order_by_3" >:: test_parse_order_by_3;
                                 ]
 
 let _ =

@@ -94,7 +94,9 @@ struct
 
   let rec parse_identifier () =
     wrap_pos (item >>= fun (Token(content, _)) ->
-                result <| Identifier(content))
+                if Lexer.is_letter content.[0] || content.[0] = '_' || content = "*"
+                then result <| Identifier(content)
+                else fail)
 
   and parse_dotted_identifier () =
     parse_binary_op_left_assoc [["."]] (parse_identifier ())
@@ -106,8 +108,13 @@ struct
                   then result (NumericLiteral content)
                   else fail)
 
+  and parse_parenthesis () =
+    wrap_pos (consume "(" >>= fun _ ->
+                parse_expression () >>= fun (expr, _) ->
+                  consume ")" <+> result expr)
+
   and parse_unary () =
-    parse_number () <|> parse_dotted_identifier ()
+    parse_number () <|> parse_dotted_identifier () <|> parse_parenthesis ()
 
   and parse_binary_op_left_assoc ops term_parser =
     let rec bin_op_iter left_term =
@@ -137,6 +144,7 @@ struct
       parse_binary_op_left_assoc [["OR"]] parse_logical_term;;
 
   let parse_expression = parse_expression ();;
+
 end;;
 
 open Expression;;
@@ -178,17 +186,17 @@ struct
     let filter_maybe maybe_list =
       maybe_list |> List.map (function | Some(x) -> [x] | None -> []) |> List.concat
     in
-    wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
-                parse_from_clause () >>= fun from_clause ->
-                  parse_where_clause () >>= function maybe_where_clause ->
-                    parse_group_by_clause () >>= function maybe_group_by_clause ->
-                      parse_order_by_clause () >>= function maybe_order_by_clause ->
-                        let raw_clause_list = [Some from_clause;
-                                               maybe_where_clause;
-                                               maybe_group_by_clause;
-                                               maybe_order_by_clause] in
-                        let clause_list = filter_maybe raw_clause_list in
-                          result <| Select { fields = fields; clauses = clause_list })
+      wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
+                  parse_from_clause () >>= fun from_clause ->
+                    parse_where_clause () >>= function maybe_where_clause ->
+                      parse_group_by_clause () >>= function maybe_group_by_clause ->
+                        parse_order_by_clause () >>= function maybe_order_by_clause ->
+                          let raw_clause_list = [Some from_clause;
+                                                 maybe_where_clause;
+                                                 maybe_group_by_clause;
+                                                 maybe_order_by_clause] in
+                          let clause_list = filter_maybe raw_clause_list in
+                            result <| Select { fields = fields; clauses = clause_list })
 
   and parse_group_by_clause () =
     lookahead_many 2 >>= function
@@ -217,7 +225,7 @@ struct
       | Some (Token("WHERE",_)) ->
           (wrap_pos (consume "WHERE" <+> parse_expression >>= fun expr ->
                        result <| WhereClause(expr)) >>= fun where_clause ->
-            result <| Some where_clause)
+             result <| Some where_clause)
       | _ -> result None
 
   and parse_select_fields () =
@@ -307,7 +315,7 @@ let run_parser_helper parser tokens =
   run_parser parser (Stream(None, tokens), []);;
 
 (* The PLSQL parser. Should be the only public function in this
-module. *)
+   module. *)
 let parse tokens =
   run_parser_helper plsql_parser tokens;;
 

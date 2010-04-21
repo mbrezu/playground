@@ -289,6 +289,17 @@ let test_parse_expression_logical_3 () =
   in
     test_parse_expr_helper "1 = 2 OR NOT 2 + 2 <> 3 AND 2 < 3" [] expected
 
+let test_parse_expression_parens_1 () =
+  let expected = (BinaryOp ("*",
+                            (BinaryOp ("+",
+                                       (NumericLiteral "1", Pos (1, 1)),
+                                       (NumericLiteral "2", Pos (5, 5))),
+                             Pos (0, 6)),
+                            (NumericLiteral "3", Pos (10, 10))),
+                  Pos (0, 10))
+  in
+    test_parse_expr_helper "(1 + 2) * 3" [] expected
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -553,6 +564,8 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_logical_2;
                                  "test_parse_expression_logical_3" >::
                                    test_parse_expression_logical_3;
+                                 "test_parse_expression_parens_1" >::
+                                   test_parse_expression_parens_1;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;

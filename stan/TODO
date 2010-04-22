@@ -1,0 +1,5 @@
+
+* TODO
+** TODO see the FIXME about `<|>` and fix it.
+** TODO implement `BETWEEN`, `EXISTS`, `IS IN` (the rest of the comparison operators)
+** TODO add tests for broken inputs (errors should be sane)

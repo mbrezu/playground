@@ -80,6 +80,7 @@ sig
     | Identifier of string
     | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
     | UnaryOp of string * expression_ast_with_pos
+    | Call of expression_ast_with_pos * expression_ast_with_pos list
   and expression_ast_with_pos = expression_ast * pos;;
 
   val parse_expression : (token, expression_ast_with_pos) parser;;
@@ -90,6 +91,7 @@ struct
     | Identifier of string
     | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
     | UnaryOp of string * expression_ast_with_pos
+    | Call of expression_ast_with_pos * expression_ast_with_pos list
   and expression_ast_with_pos = expression_ast * pos;;
 
   let rec parse_identifier () =
@@ -113,8 +115,20 @@ struct
                 parse_expression () >>= fun (expr, _) ->
                   consume ")" <+> result expr)
 
+  and parse_dotted_identifier_or_function_call () =
+    wrap_pos (parse_dotted_identifier () >>= fun (ident, ident_pos) ->
+                lookahead >>= function
+                  | Some(Token("(", _)) ->
+                      (consume "("
+                       <+> sep_by "," (parse_expression ()) >>= fun args ->
+                         consume ")" <+> (result <| Call((ident, ident_pos), args)))
+                  | _ ->
+                      result ident)
+
   and parse_unary () =
-    parse_number () <|> parse_dotted_identifier () <|> parse_parenthesis ()
+    parse_number ()
+    <|> parse_dotted_identifier_or_function_call ()
+      <|> parse_parenthesis ()
 
   and parse_binary_op_left_assoc ops term_parser =
     let rec bin_op_iter left_term =

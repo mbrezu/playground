@@ -300,6 +300,40 @@ let test_parse_expression_parens_1 () =
   in
     test_parse_expr_helper "(1 + 2) * 3" [] expected
 
+let test_parse_expression_parens_2 () =
+  let expected = (BinaryOp ("*",
+                            (BinaryOp ("+",
+                                       (NumericLiteral "1", Pos (1, 1)),
+                                       (NumericLiteral "2", Pos (5, 5))),
+                             Pos (0, 6)),
+                            (BinaryOp ("-",
+                                       (NumericLiteral "3", Pos (11, 11)),
+                                       (NumericLiteral "4", Pos (15, 15))),
+                             Pos (10, 16))),
+                  Pos (0, 16))
+  in
+    test_parse_expr_helper "(1 + 2) * (3 - 4)" [] expected
+
+let test_parse_expression_function_1 () =
+  let expected = (BinaryOp ("+",
+                            (Call
+                               ((Identifier "NVL", Pos (0, 2)),
+                                [(Identifier "A", Pos (4, 4));
+                                 (BinaryOp ("+",
+                                            (NumericLiteral "1", Pos (7, 7)),
+                                            (NumericLiteral "2", Pos (11, 11))),
+                                  Pos (7, 11))]),
+                             Pos (0, 12)),
+                            (Call
+                               ((Identifier "MAX", Pos (16, 18)),
+                                [(NumericLiteral "3", Pos (20, 20));
+                                 (NumericLiteral "4", Pos (23, 23));
+                                 (Identifier "B", Pos (26, 26))]),
+                             Pos (16, 27))),
+                  Pos (0, 27))
+  in
+    test_parse_expr_helper "NVL(a, 1 + 2) + MAX(3, 4, b)" [] expected
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -566,6 +600,10 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_logical_3;
                                  "test_parse_expression_parens_1" >::
                                    test_parse_expression_parens_1;
+                                 "test_parse_expression_parens_2" >::
+                                   test_parse_expression_parens_2;
+                                 "test_parse_expression_function_1" >::
+                                   test_parse_expression_function_1;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;

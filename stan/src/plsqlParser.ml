@@ -81,6 +81,8 @@ sig
     | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
     | UnaryOp of string * expression_ast_with_pos
     | Call of expression_ast_with_pos * expression_ast_with_pos list
+    | IsNull of expression_ast_with_pos
+    | IsNotNull of expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos;;
 
   val parse_expression : (token, expression_ast_with_pos) parser;;
@@ -92,6 +94,8 @@ struct
     | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
     | UnaryOp of string * expression_ast_with_pos
     | Call of expression_ast_with_pos * expression_ast_with_pos list
+    | IsNull of expression_ast_with_pos
+    | IsNotNull of expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos;;
 
   let rec parse_identifier () =
@@ -148,12 +152,24 @@ struct
                       result <| UnaryOp(unary_op, expr))
       | _ -> term_parser
 
+  and parse_is_null p =
+    wrap_pos (p >>= fun p_result ->
+                lookahead_many 3 >>= function
+                  | Some [Token("IS", _); Token("NULL", _); _] ->
+                      (consume_many 2) <+> (result <| IsNull(p_result) )
+                  | Some [Token("IS", _); Token("NOT", _); Token("NULL", _)] ->
+                      (consume_many 3) <+> (result <| IsNotNull(p_result))
+                  | _ ->
+                      let result_without_pos, _ = p_result in
+                        result result_without_pos)
+
   and parse_expression () =
     let parse_term = parse_binary_op_left_assoc [["*"]; ["/"]] (parse_unary ()) in
     let parse_arithmetic = parse_binary_op_left_assoc [["+"]; ["-"]] parse_term in
     let rel_ops = [["<"; "="]; [">"; "="]; ["<"; ">"]; ["<"]; [">"]; ["="]] in
     let parse_relational = parse_binary_op_left_assoc rel_ops  parse_arithmetic in
-    let parse_logical_factor = parse_maybe_unary "NOT" parse_relational in
+    let parse_is_null = parse_is_null parse_relational in
+    let parse_logical_factor = parse_maybe_unary "NOT" parse_is_null in
     let parse_logical_term = parse_binary_op_left_assoc [["AND"]] parse_logical_factor in
       parse_binary_op_left_assoc [["OR"]] parse_logical_term;;
 

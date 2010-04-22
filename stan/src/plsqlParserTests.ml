@@ -334,6 +334,30 @@ let test_parse_expression_function_1 () =
   in
     test_parse_expr_helper "NVL(a, 1 + 2) + MAX(3, 4, b)" [] expected
 
+let test_parse_expression_is_null () =
+  let expected_1 = (BinaryOp ("AND",
+                              (IsNull
+                                 (Identifier "A", Pos (0, 0)),
+                               Pos (0, 8)),
+                              (BinaryOp ("=",
+                                         (Identifier "A", Pos (14, 14)),
+                                         (Identifier "C", Pos (18, 18))),
+                               Pos (14, 18))),
+                    Pos (0, 18))
+  in
+  let expected_2 = (BinaryOp ("AND",
+                              (IsNotNull
+                                 (Identifier "B", Pos (0, 0)),
+                               Pos (0, 12)),
+                              (BinaryOp ("=",
+                                         (Identifier "A", Pos (18, 18)),
+                                         (Identifier "C", Pos (22, 22))),
+                               Pos (18, 22))),
+                    Pos (0, 22))
+  in
+    test_parse_expr_helper "a IS NULL AND a = c" [] expected_1;
+    test_parse_expr_helper "b IS NOT NULL AND a = c" [] expected_2;;
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -604,6 +628,8 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_parens_2;
                                  "test_parse_expression_function_1" >::
                                    test_parse_expression_function_1;
+                                 "test_parse_expression_is_null" >::
+                                   test_parse_expression_is_null;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;

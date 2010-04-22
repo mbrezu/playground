@@ -358,6 +358,20 @@ let test_parse_expression_is_null () =
     test_parse_expr_helper "a IS NULL AND a = c" [] expected_1;
     test_parse_expr_helper "b IS NOT NULL AND a = c" [] expected_2;;
 
+let test_parse_expression_like () =
+  let expected = (BinaryOp ("AND",
+                            (Like ((Identifier "A", Pos (0, 0)), "'Test%'"), Pos (0, 13)),
+                            (BinaryOp ("=",
+                                       (Identifier "B", Pos (19, 19)),
+                                       (BinaryOp ("+",
+                                                  (Identifier "C", Pos (23, 23)),
+                                                  (NumericLiteral "2", Pos (27, 27))),
+                                        Pos (23, 27))),
+                             Pos (19, 27))),
+                  Pos (0, 27))
+  in
+    test_parse_expr_helper "A LIKE \'Test%\' AND B = C + 2" [] expected;;
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -630,7 +644,8 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_function_1;
                                  "test_parse_expression_is_null" >::
                                    test_parse_expression_is_null;
-
+                                 "test_parse_expression_like" >::
+                                   test_parse_expression_like;
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;
                                  "test_parse_simple_select_2" >::

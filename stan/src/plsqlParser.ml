@@ -23,6 +23,12 @@ let wrap_pos p =
       get_previous_pos >>= fun end_pos ->
         result (res, Pos(start_pos, end_pos));;
 
+let wrap_pos_from ast p =
+  let _, Pos(start_pos, _) = ast in
+    p >>= fun res ->
+      get_previous_pos >>= fun end_pos ->
+        result (res, Pos(start_pos, end_pos));;
+
 let extract_limits ast_list =
   let rec last list =
     match list with
@@ -83,6 +89,7 @@ sig
     | Call of expression_ast_with_pos * expression_ast_with_pos list
     | IsNull of expression_ast_with_pos
     | IsNotNull of expression_ast_with_pos
+    | Like of expression_ast_with_pos * string
   and expression_ast_with_pos = expression_ast * pos;;
 
   val parse_expression : (token, expression_ast_with_pos) parser;;
@@ -96,6 +103,7 @@ struct
     | Call of expression_ast_with_pos * expression_ast_with_pos list
     | IsNull of expression_ast_with_pos
     | IsNotNull of expression_ast_with_pos
+    | Like of expression_ast_with_pos * string
   and expression_ast_with_pos = expression_ast * pos;;
 
   let rec parse_identifier () =
@@ -152,24 +160,48 @@ struct
                       result <| UnaryOp(unary_op, expr))
       | _ -> term_parser
 
-  and parse_is_null p =
-    wrap_pos (p >>= fun p_result ->
-                lookahead_many 3 >>= function
-                  | Some [Token("IS", _); Token("NULL", _); _] ->
-                      (consume_many 2) <+> (result <| IsNull(p_result) )
-                  | Some [Token("IS", _); Token("NOT", _); Token("NULL", _)] ->
-                      (consume_many 3) <+> (result <| IsNotNull(p_result))
-                  | _ ->
-                      let result_without_pos, _ = p_result in
-                        result result_without_pos)
+  and parse_is_null p_result =
+    wrap_pos_from p_result (lookahead_many 3 >>= function
+                              | Some [Token("IS", _); Token("NULL", _); _] ->
+                                  (consume_many 2) <+> (result <| IsNull(p_result) )
+                              | Some [Token("IS", _); Token("NOT", _); Token("NULL", _)] ->
+                                  (consume_many 3) <+> (result <| IsNotNull(p_result))
+                              | _ ->
+                                  let result_without_pos, _ = p_result in
+                                    result result_without_pos)
+
+  and parse_like p_result =
+    wrap_pos_from p_result (lookahead >>= function
+                              | Some (Token("LIKE", _)) ->
+                                  (consume "LIKE" <+> lookahead >>= function
+                                     | Some(Token(str, _)) when str.[0] = '\'' ->
+                                         consume str <+> (result <| Like(p_result, str))
+                                     | Some(Token(str, _)) ->
+                                         warning "Expected a string"
+                                         <+> (consume str)
+                                         <+> (result <| Like(p_result, str))
+                                     | _ -> error "Expected a string")
+                              | _ ->
+                                  let result_without_pos, _ = p_result in
+                                    result result_without_pos)
+
+  and parse_comparison p =
+    p >>= fun p_result ->
+      lookahead >>= function
+        | Some (Token("IS", _)) ->
+            parse_is_null p_result
+        | Some (Token("LIKE", _)) ->
+            parse_like p_result
+        | _ ->
+            result p_result
 
   and parse_expression () =
     let parse_term = parse_binary_op_left_assoc [["*"]; ["/"]] (parse_unary ()) in
     let parse_arithmetic = parse_binary_op_left_assoc [["+"]; ["-"]] parse_term in
     let rel_ops = [["<"; "="]; [">"; "="]; ["<"; ">"]; ["<"]; [">"]; ["="]] in
     let parse_relational = parse_binary_op_left_assoc rel_ops  parse_arithmetic in
-    let parse_is_null = parse_is_null parse_relational in
-    let parse_logical_factor = parse_maybe_unary "NOT" parse_is_null in
+    let parse_comparison = parse_comparison parse_relational in
+    let parse_logical_factor = parse_maybe_unary "NOT" parse_comparison in
     let parse_logical_term = parse_binary_op_left_assoc [["AND"]] parse_logical_factor in
       parse_binary_op_left_assoc [["OR"]] parse_logical_term;;
 

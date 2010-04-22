@@ -137,6 +137,10 @@ struct
                   | _ ->
                       result ident)
 
+  (* FIXME: This function should decide what to do based on
+     lookahead. `<|>` should be used very carefully, as it can result
+     in weird error messages. This is not the only instance where
+     `<|>` is used wrong. *)
   and parse_unary () =
     parse_number ()
     <|> parse_dotted_identifier_or_function_call ()

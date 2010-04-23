@@ -375,6 +375,24 @@ let test_parse_expression_like () =
   in
     test_parse_expr_helper "A LIKE \'Test%\' AND B LIKE A + 2" [] expected;;
 
+let test_parse_expression_between () =
+  let expected = (Between
+                    ((BinaryOp ("/",
+                                (NumericLiteral "1", Pos (0, 0)),
+                                (NumericLiteral "3", Pos (4, 4))),
+                      Pos (0, 4)),
+                     (BinaryOp ("+",
+                                (NumericLiteral "4", Pos (14, 14)),
+                                (Identifier "A", Pos (18, 18))),
+                      Pos (14, 18)),
+                     (BinaryOp ("-",
+                                (NumericLiteral "8", Pos (24, 24)),
+                                (NumericLiteral "2", Pos (28, 28))),
+                      Pos (24, 28))),
+                  Pos (0, 28))
+  in
+    test_parse_expr_helper "1 / 3 BETWEEN 4 + A AND 8 - 2" [] expected;;
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -649,6 +667,9 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_is_null;
                                  "test_parse_expression_like" >::
                                    test_parse_expression_like;
+                                 "test_parse_expression_between" >::
+                                   test_parse_expression_between;
+
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;
                                  "test_parse_simple_select_2" >::

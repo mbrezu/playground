@@ -91,6 +91,7 @@ sig
     | IsNull of expression_ast_with_pos
     | IsNotNull of expression_ast_with_pos
     | Like of expression_ast_with_pos * expression_ast_with_pos
+    | Between of expression_ast_with_pos * expression_ast_with_pos * expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos;;
 
   val parse_expression : (token, expression_ast_with_pos) parser;;
@@ -106,6 +107,7 @@ struct
     | IsNull of expression_ast_with_pos
     | IsNotNull of expression_ast_with_pos
     | Like of expression_ast_with_pos * expression_ast_with_pos
+    | Between of expression_ast_with_pos * expression_ast_with_pos * expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos;;
 
   let rec parse_identifier () =
@@ -180,8 +182,7 @@ struct
                               | Some [Token("IS", _); Token("NOT", _); Token("NULL", _)] ->
                                   (consume_many 3) <+> (result <| IsNotNull(p_result))
                               | _ ->
-                                  let result_without_pos, _ = p_result in
-                                    result result_without_pos)
+                                  error "parse_is_null: Internal error")
 
   and parse_like p_result p =
     wrap_pos_from p_result (lookahead >>= function
@@ -189,8 +190,16 @@ struct
                                   (consume "LIKE" <+> p >>= fun expr ->
                                      result <| Like(p_result, expr))
                               | _ ->
-                                  let result_without_pos, _ = p_result in
-                                    result result_without_pos)
+                                  error "parse_like: Internal error")
+
+  and parse_between p_result p =
+    wrap_pos_from p_result (lookahead >>= function
+                              | Some (Token("BETWEEN", _)) ->
+                                  (consume "BETWEEN" <+> p >>= fun expr_low ->
+                                     consume "AND" <+> p >>= fun expr_high ->
+                                       result <| Between(p_result, expr_low, expr_high))
+                              | _ ->
+                                  error "parse_between: Internal error")
 
   and parse_comparison p =
     p >>= fun p_result ->
@@ -199,6 +208,8 @@ struct
             parse_is_null p_result
         | Some (Token("LIKE", _)) ->
             parse_like p_result p
+        | Some (Token("BETWEEN", _)) ->
+            parse_between p_result p
         | _ ->
             result p_result
 

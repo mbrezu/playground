@@ -1,5 +1,7 @@
 
 * TODO
 ** DONE see the FIXME about `<|>` and fix it.
-** TODO implement `BETWEEN`, `EXISTS`, `IS IN` (the rest of the comparison operators)
+** DONE implement `BETWEEN`
+** DONE implement subqueries
+** TODO implement`EXISTS`, `IS IN` (the rest of the comparison operators)
 ** TODO add tests for broken inputs (errors should be sane)

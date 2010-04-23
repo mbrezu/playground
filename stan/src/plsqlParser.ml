@@ -79,23 +79,7 @@ let matching_sequence seqs =
        result <| Some str)
     <|> result None;;
 
-module Expression :
-sig
-  type expression_ast =
-    | NumericLiteral of string
-    | StringLiteral of string
-    | Identifier of string
-    | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
-    | UnaryOp of string * expression_ast_with_pos
-    | Call of expression_ast_with_pos * expression_ast_with_pos list
-    | IsNull of expression_ast_with_pos
-    | IsNotNull of expression_ast_with_pos
-    | Like of expression_ast_with_pos * expression_ast_with_pos
-    | Between of expression_ast_with_pos * expression_ast_with_pos * expression_ast_with_pos
-  and expression_ast_with_pos = expression_ast * pos;;
-
-  val parse_expression : (token, expression_ast_with_pos) parser;;
-end =
+module Ast =
 struct
   type expression_ast =
     | NumericLiteral of string
@@ -108,7 +92,39 @@ struct
     | IsNotNull of expression_ast_with_pos
     | Like of expression_ast_with_pos * expression_ast_with_pos
     | Between of expression_ast_with_pos * expression_ast_with_pos * expression_ast_with_pos
-  and expression_ast_with_pos = expression_ast * pos;;
+    | Subquery of select_ast_with_pos
+  and expression_ast_with_pos = expression_ast * pos
+
+  and select_ast =
+    | Select of select_components
+    | FromClause of select_ast_with_pos list
+    | WhereClause of expression_ast_with_pos
+    | GroupByClause of expression_ast_with_pos list
+    | OrderByClause of expression_ast_with_pos * string
+    | TableAlias of string * string
+    | TableName of string
+    | Column of expression_ast_with_pos
+    | ColumnAlias of string * expression_ast_with_pos * string
+  and select_ast_with_pos = select_ast * pos
+  and select_components = { fields : select_ast_with_pos list;
+                            clauses : select_ast_with_pos list };;
+
+  type plsql_ast =
+    | Program of plsql_ast_with_pos list
+    | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
+    | VarDecl of string * string
+    | StmtAssignment of string * expression_ast_with_pos
+  and plsql_ast_with_pos = plsql_ast * pos;;
+end;;
+
+open Ast;;
+
+module ExpressionAndSelect :
+sig
+  val parse_expression : (token, expression_ast_with_pos) parser;;
+  val parse_select : (token, select_ast_with_pos) parser;;
+end =
+struct
 
   let rec parse_identifier () =
     wrap_pos (item >>= fun (Token(content, _)) ->
@@ -129,8 +145,13 @@ struct
 
   and parse_parenthesis () =
     wrap_pos (consume "(" >>= fun _ ->
-                parse_expression () >>= fun (expr, _) ->
-                  consume ")" <+> result expr)
+                lookahead >>= function
+                  | Some (Token("SELECT", _)) ->
+                      (parse_select () >>= fun subquery ->
+                         consume ")" <+> (result <| Subquery (subquery)))
+                  | _ ->
+                      parse_expression () >>= fun (expr, _) ->
+                        consume ")" <+> result expr)
 
   and parse_dotted_identifier_or_function_call () =
     wrap_pos (parse_dotted_identifier () >>= fun (ident, ident_pos) ->
@@ -221,48 +242,11 @@ struct
     let parse_comparison = parse_comparison parse_relational in
     let parse_logical_factor = parse_maybe_unary "NOT" parse_comparison in
     let parse_logical_term = parse_binary_op_left_assoc [["AND"]] parse_logical_factor in
-      parse_binary_op_left_assoc [["OR"]] parse_logical_term;;
+      parse_binary_op_left_assoc [["OR"]] parse_logical_term
 
-  let parse_expression = parse_expression ();;
+  (* Expression ends, Select begins. *)
 
-end;;
-
-open Expression;;
-
-module Select :
-sig
-  type select_ast =
-    | Select of select_components
-    | FromClause of select_ast_with_pos list
-    | WhereClause of expression_ast_with_pos
-    | GroupByClause of expression_ast_with_pos list
-    | OrderByClause of expression_ast_with_pos * string
-    | TableAlias of string * string
-    | TableName of string
-    | Column of expression_ast_with_pos
-    | ColumnAlias of string * expression_ast_with_pos * string
-  and select_ast_with_pos = select_ast * pos
-  and select_components = { fields : select_ast_with_pos list;
-                            clauses : select_ast_with_pos list };;
-
-  val parse_select : (token, select_ast_with_pos) parser;;
-end =
-struct
-  type select_ast =
-    | Select of select_components
-    | FromClause of select_ast_with_pos list
-    | WhereClause of expression_ast_with_pos
-    | GroupByClause of expression_ast_with_pos list
-    | OrderByClause of expression_ast_with_pos * string
-    | TableAlias of string * string
-    | TableName of string
-    | Column of expression_ast_with_pos
-    | ColumnAlias of string * expression_ast_with_pos * string
-  and select_ast_with_pos = select_ast * pos
-  and select_components = { fields : select_ast_with_pos list;
-                            clauses : select_ast_with_pos list };;
-
-  let rec parse_select () =
+  and parse_select () =
     let filter_maybe maybe_list =
       maybe_list |> List.map (function | Some(x) -> [x] | None -> []) |> List.concat
     in
@@ -281,7 +265,7 @@ struct
   and parse_group_by_clause () =
     lookahead_many 2 >>= function
       | Some [Token("GROUP", _); Token("BY", _)] ->
-          (wrap_pos (consume_many 2 <+> sep_by "," parse_expression >>= fun exprs ->
+          (wrap_pos (consume_many 2 <+> sep_by "," (parse_expression ()) >>= fun exprs ->
                        result <| GroupByClause(exprs)) >>= fun group_by_clause ->
              result <| Some group_by_clause)
       | _ -> result None
@@ -289,7 +273,7 @@ struct
   and parse_order_by_clause () =
     lookahead_many 2 >>= function
       | Some [Token("ORDER", _); Token("BY", _)] ->
-          (wrap_pos (consume_many 2 <+> parse_expression >>= fun expr ->
+          (wrap_pos (consume_many 2 <+> (parse_expression ()) >>= fun expr ->
                        lookahead >>= function
                          | Some (Token("ASC", _)) ->
                              consume "ASC" <+> (result <| OrderByClause(expr, "ASC"))
@@ -303,14 +287,14 @@ struct
   and parse_where_clause () =
     lookahead >>= function
       | Some (Token("WHERE",_)) ->
-          (wrap_pos (consume "WHERE" <+> parse_expression >>= fun expr ->
+          (wrap_pos (consume "WHERE" <+> (parse_expression ()) >>= fun expr ->
                        result <| WhereClause(expr)) >>= fun where_clause ->
              result <| Some where_clause)
       | _ -> result None
 
   and parse_select_fields () =
     let parse_column =
-      wrap_pos (parse_expression >>= fun expr ->
+      wrap_pos (parse_expression () >>= fun expr ->
                   lookahead >>= function
                     | Some(Token(tok, _)) when tok <> "FROM" && tok <> "," ->
                         let make_alias alias_connector =
@@ -331,30 +315,26 @@ struct
                   result <| FromClause (tables))
 
   and parse_table_expression () =
-    let validate alias = alias <> "," && alias <> ";" && alias <> "WHERE" in
-    wrap_pos (string_item >>= fun ident ->
-                lookahead >>= function
-                  | Some(Token(alias, _)) when validate alias ->
-                      (string_item >>= fun alias ->
-                        result (TableAlias(ident, alias)))
-                  | _ ->
-                      result <| TableName(ident))
+    let validate alias = alias <> "," && alias <> ";" && alias <> "WHERE" && alias <> ")"
+    in
+      wrap_pos (string_item >>= fun ident ->
+                  lookahead >>= function
+                    | Some(Token(alias, _)) when validate alias ->
+                        (string_item >>= fun alias ->
+                           result (TableAlias(ident, alias)))
+                    | _ ->
+                        result <| TableName(ident))
 
   and parse_table_list () =
     sep_by "," (parse_table_expression ());;
 
   let parse_select = parse_select ();;
 
+  let parse_expression = parse_expression ();;
+
 end;;
 
-open Select;;
-
-type plsql_ast =
-  | Program of plsql_ast_with_pos list
-  | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
-  | VarDecl of string * string
-  | StmtAssignment of string * expression_ast_with_pos
-and plsql_ast_with_pos = plsql_ast * pos;;
+open ExpressionAndSelect;;
 
 let rec parse_statement () =
   lookahead >>= function

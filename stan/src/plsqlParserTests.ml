@@ -2,8 +2,8 @@
 open OUnit;;
 open ParserTypes;;
 open PlsqlParser;;
-open PlsqlParser.Expression;;
-open PlsqlParser.Select;;
+open PlsqlParser.Ast;;
+open PlsqlParser.ExpressionAndSelect;;
 open Lexer;;
 open Pwm;;
 
@@ -393,6 +393,22 @@ let test_parse_expression_between () =
   in
     test_parse_expr_helper "1 / 3 BETWEEN 4 + A AND 8 - 2" [] expected;;
 
+let test_parse_expression_subquery () =
+  let expected = (Subquery
+                    (Select
+                       {fields =
+                           [(Column
+                               (Identifier "A", Pos (8, 8)),
+                             Pos (8, 8))];
+                        clauses =
+                           [(FromClause
+                               [(TableName "TABLE", Pos (15, 19))],
+                             Pos (10, 19))]},
+                     Pos (1, 19)),
+                  Pos (0, 20))
+  in
+    test_parse_expr_helper "(SELECT a FROM table)" [] expected;;
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -669,6 +685,8 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_like;
                                  "test_parse_expression_between" >::
                                    test_parse_expression_between;
+                                 "test_parse_expression_subquery" >::
+                                   test_parse_expression_subquery;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;

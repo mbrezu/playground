@@ -137,14 +137,15 @@ struct
                   | _ ->
                       result ident)
 
-  (* FIXME: This function should decide what to do based on
-     lookahead. `<|>` should be used very carefully, as it can result
-     in weird error messages. This is not the only instance where
-     `<|>` is used wrong. *)
   and parse_unary () =
-    parse_number ()
-    <|> parse_dotted_identifier_or_function_call ()
-      <|> parse_parenthesis ()
+    lookahead >>= function
+      | Some (Token("(", _)) -> parse_parenthesis ()
+      | Some (Token(num, _)) when check_all is_digit num -> parse_number ()
+      | Some (Token(id, _)) -> parse_dotted_identifier_or_function_call ()
+      | _ ->
+          warning "Expected an identifier, number or '('. Inserted a '_'." <+>
+            get_next_pos >>= fun pos ->
+              result <| (Identifier "_", Pos(pos, pos))
 
   and parse_binary_op_left_assoc ops term_parser =
     let rec bin_op_iter left_term =
@@ -317,13 +318,14 @@ struct
                   result <| FromClause (tables))
 
   and parse_table_expression () =
+    let validate alias = alias <> "," && alias <> ";" && alias <> "WHERE" in
     wrap_pos (string_item >>= fun ident ->
-                string_item >>= fun alias ->
-                  if alias <> "," && alias <> ";" && alias <> "WHERE"
-                  then result (TableAlias(ident, alias))
-                  else fail)
-    <|>
-        wrap_pos (string_item >>= fun ident -> result <| TableName(ident))
+                lookahead >>= function
+                  | Some(Token(alias, _)) when validate alias ->
+                      (string_item >>= fun alias ->
+                        result (TableAlias(ident, alias)))
+                  | _ ->
+                      result <| TableName(ident))
 
   and parse_table_list () =
     sep_by "," (parse_table_expression ());;
@@ -342,7 +344,10 @@ type plsql_ast =
 and plsql_ast_with_pos = plsql_ast * pos;;
 
 let rec parse_statement () =
-  parse_block () <|> parse_assignment ()
+  lookahead >>= function
+    | Some (Token("BEGIN", _))
+    | Some (Token("DECLARE", _)) -> parse_block ()
+    | _ -> parse_assignment ()
 
 and parse_block () =
   let parse_vardecl =

@@ -360,17 +360,20 @@ let test_parse_expression_is_null () =
 
 let test_parse_expression_like () =
   let expected = (BinaryOp ("AND",
-                            (Like ((Identifier "A", Pos (0, 0)), "'Test%'"), Pos (0, 13)),
-                            (BinaryOp ("=",
-                                       (Identifier "B", Pos (19, 19)),
-                                       (BinaryOp ("+",
-                                                  (Identifier "C", Pos (23, 23)),
-                                                  (NumericLiteral "2", Pos (27, 27))),
-                                        Pos (23, 27))),
-                             Pos (19, 27))),
-                  Pos (0, 27))
+                            (Like
+                               ((Identifier "A", Pos (0, 0)),
+                                (StringLiteral "'Test%'", Pos (7, 13))),
+                             Pos (0, 13)),
+                            (Like
+                               ((Identifier "B", Pos (19, 19)),
+                                (BinaryOp ("+",
+                                           (Identifier "A", Pos (26, 26)),
+                                           (NumericLiteral "2", Pos (30, 30))),
+                                 Pos (26, 30))),
+                             Pos (19, 30))),
+                  Pos (0, 30))
   in
-    test_parse_expr_helper "A LIKE \'Test%\' AND B = C + 2" [] expected;;
+    test_parse_expr_helper "A LIKE \'Test%\' AND B LIKE A + 2" [] expected;;
 
 let test_parse_select_helper = parse_helper parse_select_helper;;
 

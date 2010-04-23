@@ -83,13 +83,14 @@ module Expression :
 sig
   type expression_ast =
     | NumericLiteral of string
+    | StringLiteral of string
     | Identifier of string
     | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
     | UnaryOp of string * expression_ast_with_pos
     | Call of expression_ast_with_pos * expression_ast_with_pos list
     | IsNull of expression_ast_with_pos
     | IsNotNull of expression_ast_with_pos
-    | Like of expression_ast_with_pos * string
+    | Like of expression_ast_with_pos * expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos;;
 
   val parse_expression : (token, expression_ast_with_pos) parser;;
@@ -97,20 +98,22 @@ end =
 struct
   type expression_ast =
     | NumericLiteral of string
+    | StringLiteral of string
     | Identifier of string
     | BinaryOp of string * expression_ast_with_pos * expression_ast_with_pos
     | UnaryOp of string * expression_ast_with_pos
     | Call of expression_ast_with_pos * expression_ast_with_pos list
     | IsNull of expression_ast_with_pos
     | IsNotNull of expression_ast_with_pos
-    | Like of expression_ast_with_pos * string
+    | Like of expression_ast_with_pos * expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos;;
 
   let rec parse_identifier () =
     wrap_pos (item >>= fun (Token(content, _)) ->
-                if Lexer.is_letter content.[0] || content.[0] = '_' || content = "*"
+                if is_letter content.[0] || content.[0] = '_' || content = "*"
                 then result <| Identifier(content)
-                else fail)
+                else warning (sprintf "Expected an identifier, but got '%s'." content) <+>
+                  (result <| Identifier(content)))
 
   and parse_dotted_identifier () =
     parse_binary_op_left_assoc [["."]] (parse_identifier ())
@@ -137,11 +140,16 @@ struct
                   | _ ->
                       result ident)
 
+  and parse_string () =
+    wrap_pos (string_item >>= fun str -> result <| StringLiteral str)
+
   and parse_unary () =
     lookahead >>= function
       | Some (Token("(", _)) -> parse_parenthesis ()
       | Some (Token(num, _)) when check_all is_digit num -> parse_number ()
-      | Some (Token(id, _)) -> parse_dotted_identifier_or_function_call ()
+      | Some (Token(str, _)) when str.[0] = '\'' -> parse_string ()
+      | Some (Token(id, _)) when is_letter id.[0] || id.[0] = '_' || id.[0] = '*'
+          -> parse_dotted_identifier_or_function_call ()
       | _ ->
           warning "Expected an identifier, number or '('. Inserted a '_'." <+>
             get_next_pos >>= fun pos ->
@@ -175,17 +183,11 @@ struct
                                   let result_without_pos, _ = p_result in
                                     result result_without_pos)
 
-  and parse_like p_result =
+  and parse_like p_result p =
     wrap_pos_from p_result (lookahead >>= function
                               | Some (Token("LIKE", _)) ->
-                                  (consume "LIKE" <+> lookahead >>= function
-                                     | Some(Token(str, _)) when str.[0] = '\'' ->
-                                         consume str <+> (result <| Like(p_result, str))
-                                     | Some(Token(str, _)) ->
-                                         warning "Expected a string"
-                                         <+> (consume str)
-                                         <+> (result <| Like(p_result, str))
-                                     | _ -> error "Expected a string")
+                                  (consume "LIKE" <+> p >>= fun expr ->
+                                     result <| Like(p_result, expr))
                               | _ ->
                                   let result_without_pos, _ = p_result in
                                     result result_without_pos)
@@ -196,7 +198,7 @@ struct
         | Some (Token("IS", _)) ->
             parse_is_null p_result
         | Some (Token("LIKE", _)) ->
-            parse_like p_result
+            parse_like p_result p
         | _ ->
             result p_result
 

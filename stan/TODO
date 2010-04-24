@@ -3,5 +3,11 @@
 ** DONE see the FIXME about `<|>` and fix it.
 ** DONE implement `BETWEEN`
 ** DONE implement subqueries
-** TODO implement`EXISTS`, `IS IN` (the rest of the comparison operators)
+** DONE implement`EXISTS`, `IN`
+** TODO NOT versions for the above
+** TODO `ANY`, `SOME`, `ALL`
+** TODO list of items (expr, ...)
 ** TODO add tests for broken inputs (errors should be sane)
+
+* Clarify usage:
+** `IS OF`

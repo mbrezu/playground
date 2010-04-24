@@ -409,6 +409,37 @@ let test_parse_expression_subquery () =
   in
     test_parse_expr_helper "(SELECT a FROM table)" [] expected;;
 
+let test_parse_expression_exists () =
+  let expected = (Exists
+                    (Subquery
+                       (Select
+                          {fields =
+                              [(Column (Identifier "A", Pos (15, 15)), Pos (15, 15))];
+                           clauses =
+                              [(FromClause
+                                  [(TableName "TABLE", Pos (22, 26))], Pos (17, 26))]},
+                        Pos (8, 26)),
+                     Pos (7, 27)),
+                  Pos (0, 27))
+  in
+    test_parse_expr_helper "EXISTS (SELECT a FROM table)" [] expected;;
+
+let test_parse_expression_in () =
+  let expected = (In ((Identifier "A", Pos (0, 0)),
+                      (Subquery
+                         (Select
+                            {fields =
+                                [(Column (Identifier "A", Pos (13, 13)), Pos (13, 13))];
+                             clauses =
+                                [(FromClause
+                                    [(TableName "TABLE", Pos (20, 24))],
+                                  Pos (15, 24))]},
+                          Pos (6, 24)),
+                       Pos (5, 25))),
+                  Pos (0, 25))
+  in
+    test_parse_expr_helper "A IN (SELECT a FROM table)" [] expected;;
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -687,6 +718,10 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_between;
                                  "test_parse_expression_subquery" >::
                                    test_parse_expression_subquery;
+                                 "test_parse_expression_exists" >::
+                                   test_parse_expression_exists;
+                                 "test_parse_expression_in" >::
+                                   test_parse_expression_in;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;

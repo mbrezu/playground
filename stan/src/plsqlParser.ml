@@ -92,7 +92,12 @@ struct
     | IsNotNull of expression_ast_with_pos
     | Like of expression_ast_with_pos * expression_ast_with_pos
     | Between of expression_ast_with_pos * expression_ast_with_pos * expression_ast_with_pos
+    | NotBetween of
+        expression_ast_with_pos * expression_ast_with_pos * expression_ast_with_pos
     | Subquery of select_ast_with_pos
+    | Exists of expression_ast_with_pos
+    | In of expression_ast_with_pos * expression_ast_with_pos
+    | NotIn of expression_ast_with_pos * expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos
 
   and select_ast =
@@ -171,6 +176,9 @@ struct
       | Some (Token("(", _)) -> parse_parenthesis ()
       | Some (Token(num, _)) when check_all is_digit num -> parse_number ()
       | Some (Token(str, _)) when str.[0] = '\'' -> parse_string ()
+      | Some (Token("EXISTS", _)) ->
+          wrap_pos (consume "EXISTS" <+> parse_expression () >>= fun expr ->
+                      result <| Exists(expr))
       | Some (Token(id, _)) when is_letter id.[0] || id.[0] = '_' || id.[0] = '*'
           -> parse_dotted_identifier_or_function_call ()
       | _ ->
@@ -213,6 +221,14 @@ struct
                               | _ ->
                                   error "parse_like: Internal error")
 
+  and parse_in p_result p =
+    wrap_pos_from p_result (lookahead >>= function
+                              | Some (Token("IN", _)) ->
+                                  (consume "IN" <+> p >>= fun expr ->
+                                     result <| In(p_result, expr))
+                              | _ ->
+                                  error "parse_in: Internal error")
+
   and parse_between p_result p =
     wrap_pos_from p_result (lookahead >>= function
                               | Some (Token("BETWEEN", _)) ->
@@ -229,6 +245,8 @@ struct
             parse_is_null p_result
         | Some (Token("LIKE", _)) ->
             parse_like p_result p
+        | Some (Token("IN", _)) ->
+            parse_in p_result p
         | Some (Token("BETWEEN", _)) ->
             parse_between p_result p
         | _ ->

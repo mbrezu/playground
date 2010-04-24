@@ -96,6 +96,9 @@ struct
         expression_ast_with_pos * expression_ast_with_pos * expression_ast_with_pos
     | Subquery of select_ast_with_pos
     | Exists of expression_ast_with_pos
+    | Any of expression_ast_with_pos
+    | SqlSome of expression_ast_with_pos
+    | All of expression_ast_with_pos
     | In of expression_ast_with_pos * expression_ast_with_pos
     | NotIn of expression_ast_with_pos * expression_ast_with_pos
   and expression_ast_with_pos = expression_ast * pos
@@ -176,6 +179,15 @@ struct
       | Some (Token("(", _)) -> parse_parenthesis ()
       | Some (Token(num, _)) when check_all is_digit num -> parse_number ()
       | Some (Token(str, _)) when str.[0] = '\'' -> parse_string ()
+      | Some (Token("ANY", _)) ->
+          wrap_pos (consume "ANY" <+> parse_expression () >>= fun expr ->
+                      result <| Any(expr))
+      | Some (Token("ALL", _)) ->
+          wrap_pos (consume "ALL" <+> parse_expression () >>= fun expr ->
+                      result <| All(expr))
+      | Some (Token("SOME", _)) ->
+          wrap_pos (consume "SOME" <+> parse_expression () >>= fun expr ->
+                      result <| SqlSome(expr))
       | Some (Token("EXISTS", _)) ->
           wrap_pos (consume "EXISTS" <+> parse_expression () >>= fun expr ->
                       result <| Exists(expr))

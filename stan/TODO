@@ -4,8 +4,8 @@
 ** DONE implement `BETWEEN`
 ** DONE implement subqueries
 ** DONE implement`EXISTS`, `IN`
-** TODO NOT versions for the above
-** TODO `ANY`, `SOME`, `ALL`
+** DONE NOT versions for the above
+** DONE `ANY`, `SOME`, `ALL`
 ** TODO list of items (expr, ...)
 ** TODO add tests for broken inputs (errors should be sane)
 

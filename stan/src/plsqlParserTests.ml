@@ -470,6 +470,69 @@ let test_parse_expression_in () =
     test_parse_expr_helper "A IN (SELECT a FROM table)" [] expected_1;
     test_parse_expr_helper "A NOT IN (SELECT a FROM table)" [] expected_2;;
 
+let test_parse_expression_any () =
+  let expected = (BinaryOp (">=",
+                            (Identifier "A", Pos (0, 0)),
+                            (Any
+                               (Subquery
+                                  (Select
+                                     {fields =
+                                         [(Column
+                                             (Identifier "A", Pos (17, 17)),
+                                           Pos (17, 17))];
+                                      clauses =
+                                         [(FromClause
+                                             [(TableName "T", Pos (24, 24))],
+                                           Pos (19, 24))]},
+                                   Pos (10, 24)),
+                                Pos (9, 25)),
+                             Pos (5, 25))),
+                  Pos (0, 25))
+  in
+    test_parse_expr_helper "A >= ANY (SELECT A FROM T)" [] expected;;
+
+let test_parse_expression_all () =
+  let expected = (BinaryOp (">=",
+                            (Identifier "A", Pos (0, 0)),
+                            (All
+                               (Subquery
+                                  (Select
+                                     {fields =
+                                         [(Column
+                                             (Identifier "A", Pos (17, 17)),
+                                           Pos (17, 17))];
+                                      clauses =
+                                         [(FromClause
+                                             [(TableName "T", Pos (24, 24))],
+                                           Pos (19, 24))]},
+                                   Pos (10, 24)),
+                                Pos (9, 25)),
+                             Pos (5, 25))),
+                  Pos (0, 25))
+  in
+    test_parse_expr_helper "A >= ALL (SELECT A FROM T)" [] expected;;
+
+let test_parse_expression_some () =
+  let expected = (BinaryOp (">=",
+                            (Identifier "A", Pos (0, 0)),
+                            (SqlSome
+                               (Subquery
+                                  (Select
+                                     {fields =
+                                         [(Column
+                                             (Identifier "A", Pos (18, 18)),
+                                           Pos (18, 18))];
+                                      clauses =
+                                         [(FromClause
+                                             [(TableName "T", Pos (25, 25))],
+                                           Pos (20, 25))]},
+                                   Pos (11, 25)),
+                                Pos (10, 26)),
+                             Pos (5, 26))),
+                  Pos (0, 26))
+  in
+    test_parse_expr_helper "A >= Some (SELECT A FROM T)" [] expected;;
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -752,6 +815,12 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_exists;
                                  "test_parse_expression_in" >::
                                    test_parse_expression_in;
+                                 "test_parse_expression_any" >::
+                                   test_parse_expression_any;
+                                 "test_parse_expression_all" >::
+                                   test_parse_expression_all;
+                                 "test_parse_expression_some" >::
+                                   test_parse_expression_some;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;

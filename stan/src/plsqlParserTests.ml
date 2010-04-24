@@ -376,7 +376,7 @@ let test_parse_expression_like () =
     test_parse_expr_helper "A LIKE \'Test%\' AND B LIKE A + 2" [] expected;;
 
 let test_parse_expression_between () =
-  let expected = (Between
+  let expected_1 = (Between
                     ((BinaryOp ("/",
                                 (NumericLiteral "1", Pos (0, 0)),
                                 (NumericLiteral "3", Pos (4, 4))),
@@ -391,7 +391,23 @@ let test_parse_expression_between () =
                       Pos (24, 28))),
                   Pos (0, 28))
   in
-    test_parse_expr_helper "1 / 3 BETWEEN 4 + A AND 8 - 2" [] expected;;
+  let expected_2 = (NotBetween
+                      ((BinaryOp ("/",
+                                  (NumericLiteral "1", Pos (0, 0)),
+                                  (NumericLiteral "3", Pos (4, 4))),
+                        Pos (0, 4)),
+                       (BinaryOp ("+",
+                                  (NumericLiteral "4", Pos (18, 18)),
+                                  (Identifier "A", Pos (22, 22))),
+                        Pos (18, 22)),
+                       (BinaryOp ("-",
+                                  (NumericLiteral "8", Pos (28, 28)),
+                                  (NumericLiteral "2", Pos (32, 32))),
+                        Pos (28, 32))),
+                    Pos (0, 32))
+  in
+    test_parse_expr_helper "1 / 3 BETWEEN 4 + A AND 8 - 2" [] expected_1;
+    test_parse_expr_helper "1 / 3 NOT BETWEEN 4 + A AND 8 - 2" [] expected_2;;
 
 let test_parse_expression_subquery () =
   let expected = (Subquery
@@ -425,7 +441,7 @@ let test_parse_expression_exists () =
     test_parse_expr_helper "EXISTS (SELECT a FROM table)" [] expected;;
 
 let test_parse_expression_in () =
-  let expected = (In ((Identifier "A", Pos (0, 0)),
+  let expected_1 = (In ((Identifier "A", Pos (0, 0)),
                       (Subquery
                          (Select
                             {fields =
@@ -438,7 +454,21 @@ let test_parse_expression_in () =
                        Pos (5, 25))),
                   Pos (0, 25))
   in
-    test_parse_expr_helper "A IN (SELECT a FROM table)" [] expected;;
+  let expected_2 = (NotIn ((Identifier "A", Pos (0, 0)),
+                           (Subquery
+                              (Select
+                                 {fields =
+                                     [(Column (Identifier "A", Pos (17, 17)), Pos (17, 17))];
+                                  clauses =
+                                     [(FromClause
+                                         [(TableName "TABLE", Pos (24, 28))],
+                                       Pos (19, 28))]},
+                               Pos (10, 28)),
+                            Pos (9, 29))),
+                    Pos (0, 29))
+  in
+    test_parse_expr_helper "A IN (SELECT a FROM table)" [] expected_1;
+    test_parse_expr_helper "A NOT IN (SELECT a FROM table)" [] expected_2;;
 
 let test_parse_select_helper = parse_helper parse_select_helper;;
 

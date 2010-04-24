@@ -221,20 +221,30 @@ struct
                               | _ ->
                                   error "parse_like: Internal error")
 
-  and parse_in p_result p =
+  and parse_in p_result p useNot =
     wrap_pos_from p_result (lookahead >>= function
                               | Some (Token("IN", _)) ->
                                   (consume "IN" <+> p >>= fun expr ->
-                                     result <| In(p_result, expr))
+                                     let in_result =
+                                       if useNot
+                                       then NotIn(p_result, expr)
+                                       else In(p_result, expr)
+                                     in
+                                       result in_result)
                               | _ ->
                                   error "parse_in: Internal error")
 
-  and parse_between p_result p =
+  and parse_between p_result p useNot =
     wrap_pos_from p_result (lookahead >>= function
                               | Some (Token("BETWEEN", _)) ->
                                   (consume "BETWEEN" <+> p >>= fun expr_low ->
                                      consume "AND" <+> p >>= fun expr_high ->
-                                       result <| Between(p_result, expr_low, expr_high))
+                                       let between_result =
+                                         if useNot
+                                         then NotBetween(p_result, expr_low, expr_high)
+                                         else Between(p_result, expr_low, expr_high)
+                                       in
+                                         result between_result)
                               | _ ->
                                   error "parse_between: Internal error")
 
@@ -246,9 +256,17 @@ struct
         | Some (Token("LIKE", _)) ->
             parse_like p_result p
         | Some (Token("IN", _)) ->
-            parse_in p_result p
+            parse_in p_result p false
         | Some (Token("BETWEEN", _)) ->
-            parse_between p_result p
+            parse_between p_result p false
+        | Some (Token("NOT", _)) ->
+            (consume "NOT" <+> lookahead >>= function
+               | Some (Token("BETWEEN", _)) ->
+                   parse_between p_result p true
+               | Some (Token("IN", _)) ->
+                   parse_in p_result p true
+               | _ ->
+                   result p_result)
         | _ ->
             result p_result
 

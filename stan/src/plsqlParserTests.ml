@@ -533,6 +533,20 @@ let test_parse_expression_some () =
   in
     test_parse_expr_helper "A >= Some (SELECT A FROM T)" [] expected;;
 
+let test_parse_expression_expr_list () =
+  let expected = (BinaryOp (">=",
+                            (Identifier "A", Pos (0, 0)),
+                            (SqlSome
+                               (List
+                                  [(Identifier "B", Pos (11, 11));
+                                   (Identifier "C", Pos (14, 14));
+                                   (Identifier "D", Pos (17, 17))],
+                                Pos (10, 18)),
+                             Pos (5, 18))),
+                  Pos (0, 18))
+  in
+    test_parse_expr_helper "A >= Some (B, C, D)" [] expected;;
+
 let test_parse_select_helper = parse_helper parse_select_helper;;
 
 let test_parse_simple_select_1 () =
@@ -821,6 +835,8 @@ let suite = "Parser tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
                                    test_parse_expression_all;
                                  "test_parse_expression_some" >::
                                    test_parse_expression_some;
+                                 "test_parse_expression_expr_list" >::
+                                   test_parse_expression_expr_list;
 
                                  "test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;

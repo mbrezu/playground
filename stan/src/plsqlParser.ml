@@ -101,6 +101,7 @@ struct
     | All of expression_ast_with_pos
     | In of expression_ast_with_pos * expression_ast_with_pos
     | NotIn of expression_ast_with_pos * expression_ast_with_pos
+    | List of expression_ast_with_pos list
   and expression_ast_with_pos = expression_ast * pos
 
   and select_ast =
@@ -158,8 +159,9 @@ struct
                       (parse_select () >>= fun subquery ->
                          consume ")" <+> (result <| Subquery (subquery)))
                   | _ ->
-                      parse_expression () >>= fun (expr, _) ->
-                        consume ")" <+> result expr)
+                      sep_by "," (parse_expression ()) >>= function
+                        | [(expr, _)] -> consume ")" <+> (result expr)
+                        | exprs -> consume ")" <+> (result <| List(exprs)))
 
   and parse_dotted_identifier_or_function_call () =
     wrap_pos (parse_dotted_identifier () >>= fun (ident, ident_pos) ->

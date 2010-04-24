@@ -6,8 +6,9 @@
 ** DONE implement`EXISTS`, `IN`
 ** DONE NOT versions for the above
 ** DONE `ANY`, `SOME`, `ALL`
-** TODO list of items (expr, ...)
+** DONE list of items (expr, ...)
 ** TODO add tests for broken inputs (errors should be sane)
+
 
 * Clarify usage:
 ** `IS OF`

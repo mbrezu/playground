@@ -104,14 +104,22 @@ struct
     | List of expression_ast_with_pos list
   and expression_ast_with_pos = expression_ast * pos
 
+  and join_type = InnerJoin | OuterJoin | FullOuterJoin | LeftOuterJoin | RightOuterJoin
+  and table_expression_ast =
+    | TableAlias of string * string
+    | TableName of string
+    | TableJoin of join_type *
+        table_expression_ast_with_pos *
+        table_expression_ast_with_pos *
+        expression_ast_with_pos
+  and table_expression_ast_with_pos = table_expression_ast * pos
+
   and select_ast =
     | Select of select_components
-    | FromClause of select_ast_with_pos list
+    | FromClause of table_expression_ast_with_pos list
     | WhereClause of expression_ast_with_pos
     | GroupByClause of expression_ast_with_pos list
     | OrderByClause of expression_ast_with_pos * string
-    | TableAlias of string * string
-    | TableName of string
     | Column of expression_ast_with_pos
     | ColumnAlias of string * expression_ast_with_pos * string
   and select_ast_with_pos = select_ast * pos
@@ -134,6 +142,17 @@ sig
   val parse_select : (token, select_ast_with_pos) parser;;
 end =
 struct
+
+  let parse_binary_op_left_assoc_generic ops term_parser combiner =
+    let rec bin_op_iter left_term =
+      matching_sequence ops >>= function
+        | Some found_op ->
+            (term_parser >>= fun right_term ->
+               bin_op_iter (combiner found_op left_term right_term,
+                            combine_ast_pos left_term right_term))
+        | None -> result left_term
+    in
+      term_parser >>= fun first_term -> bin_op_iter first_term
 
   let rec parse_identifier () =
     wrap_pos (item >>= fun (Token(content, _)) ->
@@ -201,15 +220,8 @@ struct
               result <| (Identifier "_", Pos(pos, pos))
 
   and parse_binary_op_left_assoc ops term_parser =
-    let rec bin_op_iter left_term =
-      matching_sequence ops >>= function
-        | Some found_op ->
-            (term_parser >>= fun right_term ->
-               bin_op_iter (BinaryOp(found_op, left_term, right_term),
-                            combine_ast_pos left_term right_term))
-        | None -> result left_term
-    in
-      term_parser >>= fun first_term -> bin_op_iter first_term
+    let combiner op left right = BinaryOp(op, left, right) in
+      parse_binary_op_left_assoc_generic ops term_parser combiner
 
   and parse_maybe_unary unary_op term_parser =
     lookahead >>= function
@@ -364,8 +376,17 @@ struct
                 parse_table_list () >>= fun tables ->
                   result <| FromClause (tables))
 
-  and parse_table_expression () =
-    let validate alias = alias <> "," && alias <> ";" && alias <> "WHERE" && alias <> ")"
+  and parse_table_with_alias () =
+    let validate alias =
+      alias <> ","
+      && alias <> ";"
+      && alias <> "WHERE"
+      && alias <> ")"
+      && alias <> "INNER"
+      && alias <> "OUTER"
+      && alias <> "FULL"
+      && alias <> "RIGHT"
+      && alias <> "LEFT"
     in
       wrap_pos (string_item >>= fun ident ->
                   lookahead >>= function
@@ -374,6 +395,29 @@ struct
                            result (TableAlias(ident, alias)))
                     | _ ->
                         result <| TableName(ident))
+
+  and parse_table_expression () =
+    let rec pte_iter left =
+      lookahead_many 3 >>= function
+        | Some[Token("INNER", _); Token("JOIN", _); _] ->
+            join_parser 2 left InnerJoin
+        | Some[Token("OUTER", _); Token("JOIN", _); _] ->
+            join_parser 2 left OuterJoin
+        | Some[Token("FULL", _); Token("OUTER", _); Token("JOIN", _)] ->
+            join_parser 3 left FullOuterJoin
+        | Some[Token("LEFT", _); Token("OUTER", _); Token("JOIN", _)] ->
+            join_parser 3 left LeftOuterJoin
+        | Some[Token("RIGHT", _); Token("OUTER", _); Token("JOIN", _)] ->
+            join_parser 3 left RightOuterJoin
+        | _ -> result left
+    and join_parser operator_length left join_kind =
+      (consume_many operator_length <+> (parse_table_with_alias ()) >>= fun right ->
+         consume "ON" <+> (parse_expression ()) >>= fun expr ->
+           pte_iter (TableJoin(join_kind, left, right, expr),
+                     combine_ast_pos left expr))
+    in
+      parse_table_with_alias () >>= fun left ->
+        pte_iter left
 
   and parse_table_list () =
     sep_by "," (parse_table_expression ());;

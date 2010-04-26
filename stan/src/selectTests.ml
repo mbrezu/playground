@@ -223,7 +223,8 @@ let test_parse_group_by_1 () =
                              Pos (39, 49)),
                           Pos (33, 49));
                          (GroupByClause
-                            [(Identifier "PRODUCT", Pos (60, 66)); (Identifier "PRICE", Pos (69, 73))],
+                            [(Identifier "PRODUCT", Pos (60, 66));
+                             (Identifier "PRICE", Pos (69, 73))],
                           Pos (51, 73))]},
                   Pos (0, 73))
   in
@@ -384,6 +385,76 @@ LEFT OUTER JOIN Table3 t3 ON t2.f2 = t3.f1
       []
       expected
 
+let test_parse_group_by_having_1 () =
+  let expected = (Select
+                    {fields =
+                        [(Column (Identifier "PRODUCT", Pos (8, 14)), Pos (8, 14));
+                         (Column (Identifier "PRICE", Pos (17, 21)), Pos (17, 21))];
+                     clauses =
+                        [(FromClause [(TableName "TABLE", Pos (29, 33))], Pos (24, 33));
+                         (WhereClause
+                            (BinaryOp (">=",
+                                       (Identifier "PRICE", Pos (42, 46)),
+                                       (NumericLiteral "10", Pos (51, 52))),
+                             Pos (42, 52)),
+                          Pos (36, 52));
+                         (GroupByClause
+                            [(Identifier "PRODUCT", Pos (64, 70));
+                             (Identifier "PRICE", Pos (73, 77))],
+                          Pos (55, 77));
+                         (HavingClause
+                            (Like
+                               ((Identifier "PRODUCT", Pos (86, 92)),
+                                (StringLiteral "'Wheel%'", Pos (99, 106))),
+                             Pos (86, 106)),
+                          Pos (79, 106))]},
+                  Pos (1, 106))
+in
+  test_parse_select_helper
+    "
+SELECT Product, Price 
+FROM Table 
+WHERE Price >= 10 
+GROUP BY Product, Price
+HAVING Product LIKE 'Wheel%'"
+    []
+    expected
+
+let test_parse_group_by_having_2 () =
+  let expected = (Select
+                    {fields =
+                        [(Column (Identifier "PRODUCT", Pos (8, 14)), Pos (8, 14));
+                         (Column (Identifier "PRICE", Pos (17, 21)), Pos (17, 21))];
+                     clauses =
+                        [(FromClause [(TableName "TABLE", Pos (29, 33))], Pos (24, 33));
+                         (WhereClause
+                            (BinaryOp (">=",
+                                       (Identifier "PRICE", Pos (41, 45)),
+                                       (NumericLiteral "10", Pos (50, 51))),
+                             Pos (41, 51)),
+                          Pos (35, 51));
+                         (HavingClause
+                            (Like
+                               ((Identifier "PRODUCT", Pos (61, 67)),
+                                (StringLiteral "'Wheel%'", Pos (74, 81))),
+                             Pos (61, 81)),
+                          Pos (54, 81));
+                         (GroupByClause
+                            [(Identifier "PRODUCT", Pos (92, 98));
+                             (Identifier "PRICE", Pos (101, 105))],
+                          Pos (83, 105))]},
+                  Pos (1, 105))
+in
+  test_parse_select_helper
+    "
+SELECT Product, Price 
+FROM Table
+WHERE Price >= 10 
+HAVING Product LIKE 'Wheel%'
+GROUP BY Product, Price"
+    []
+    expected
+
 let suite = "Select tests" >::: ["test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;
                                  "test_parse_simple_select_2" >::
@@ -403,4 +474,8 @@ let suite = "Select tests" >::: ["test_parse_simple_select_1" >::
                                  "test_parse_inner_join" >:: test_parse_inner_join;
                                  "test_parse_outer_join" >:: test_parse_outer_join;
                                  "test_parse_many_join_1" >:: test_parse_many_join_1;
+                                 "test_parse_group_by_having_1" >::
+                                   test_parse_group_by_having_1;
+                                 "test_parse_group_by_having_2" >::
+                                   test_parse_group_by_having_2;
                                 ]

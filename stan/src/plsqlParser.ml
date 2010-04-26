@@ -119,6 +119,7 @@ struct
     | FromClause of table_expression_ast_with_pos list
     | WhereClause of expression_ast_with_pos
     | GroupByClause of expression_ast_with_pos list
+    | HavingClause of expression_ast_with_pos
     | OrderByClause of expression_ast_with_pos * string
     | Column of expression_ast_with_pos
     | ColumnAlias of string * expression_ast_with_pos * string
@@ -315,45 +316,42 @@ struct
     in
       wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
                   parse_from_clause () >>= fun from_clause ->
-                    parse_where_clause () >>= function maybe_where_clause ->
-                      parse_group_by_clause () >>= function maybe_group_by_clause ->
-                        parse_order_by_clause () >>= function maybe_order_by_clause ->
-                          let raw_clause_list = [Some from_clause;
-                                                 maybe_where_clause;
-                                                 maybe_group_by_clause;
-                                                 maybe_order_by_clause] in
-                          let clause_list = filter_maybe raw_clause_list in
-                            result <| Select { fields = fields; clauses = clause_list })
+                    parse_select_clauses [] >>= fun clauses ->
+                      result <| Select { fields = fields; clauses = from_clause :: clauses })
+
+  and parse_select_clauses clauses =
+    let clause_parser p =
+      p () >>= fun new_clause ->
+        parse_select_clauses (new_clause :: clauses)
+    in
+    lookahead_many 2 >>= function
+      | Some [Token ("HAVING", _); _] -> clause_parser parse_having_clause
+      | Some [Token ("GROUP", _); Token("BY", _)] -> clause_parser parse_group_by_clause
+      | Some [Token ("ORDER", _); Token("BY", _)] -> clause_parser parse_order_by_clause
+      | Some [Token ("WHERE", _); _] -> clause_parser parse_where_clause
+      | _ -> result <| List.rev clauses
+
+  and parse_having_clause () =
+    wrap_pos (consume "HAVING" <+> (parse_expression ()) >>= fun expr ->
+                result <| HavingClause(expr))
 
   and parse_group_by_clause () =
-    lookahead_many 2 >>= function
-      | Some [Token("GROUP", _); Token("BY", _)] ->
-          (wrap_pos (consume_many 2 <+> sep_by "," (parse_expression ()) >>= fun exprs ->
-                       result <| GroupByClause(exprs)) >>= fun group_by_clause ->
-             result <| Some group_by_clause)
-      | _ -> result None
+    wrap_pos (consume_many 2 <+> sep_by "," (parse_expression ()) >>= fun exprs ->
+                result <| GroupByClause(exprs))
 
   and parse_order_by_clause () =
-    lookahead_many 2 >>= function
-      | Some [Token("ORDER", _); Token("BY", _)] ->
-          (wrap_pos (consume_many 2 <+> (parse_expression ()) >>= fun expr ->
-                       lookahead >>= function
-                         | Some (Token("ASC", _)) ->
-                             consume "ASC" <+> (result <| OrderByClause(expr, "ASC"))
-                         | Some (Token("DESC", _)) ->
-                             consume "DESC" <+> (result <| OrderByClause(expr, "DESC"))
-                         | _ ->
-                             result <| OrderByClause(expr, "")) >>= fun order_by_clause ->
-             result <| Some order_by_clause)
-      | _ -> result None
+    wrap_pos (consume_many 2 <+> (parse_expression ()) >>= fun expr ->
+                lookahead >>= function
+                  | Some (Token("ASC", _)) ->
+                      consume "ASC" <+> (result <| OrderByClause(expr, "ASC"))
+                  | Some (Token("DESC", _)) ->
+                      consume "DESC" <+> (result <| OrderByClause(expr, "DESC"))
+                  | _ ->
+                      result <| OrderByClause(expr, ""))
 
   and parse_where_clause () =
-    lookahead >>= function
-      | Some (Token("WHERE",_)) ->
-          (wrap_pos (consume "WHERE" <+> (parse_expression ()) >>= fun expr ->
-                       result <| WhereClause(expr)) >>= fun where_clause ->
-             result <| Some where_clause)
-      | _ -> result None
+    wrap_pos (consume "WHERE" <+> (parse_expression ()) >>= fun expr ->
+                result <| WhereClause(expr))
 
   and parse_select_fields () =
     let parse_column =

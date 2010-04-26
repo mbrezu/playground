@@ -131,6 +131,7 @@ struct
     | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
     | VarDecl of string * string
     | StmtAssignment of string * expression_ast_with_pos
+    | StmtSelect of select_ast_with_pos
   and plsql_ast_with_pos = plsql_ast * pos;;
 end;;
 
@@ -434,21 +435,26 @@ let rec parse_statement () =
   lookahead >>= function
     | Some (Token("BEGIN", _))
     | Some (Token("DECLARE", _)) -> parse_block ()
+    | Some (Token("SELECT", _)) -> parse_select_statement ()
     | _ -> parse_assignment ()
+
+and parse_select_statement () =
+  wrap_pos (parse_select >>= fun select ->
+              parse_semicolon () <+> (result <| StmtSelect (select)))
 
 and parse_block () =
   let parse_vardecl =
     wrap_pos (item >>= fun variable ->
                 item >>= fun type_name ->
-                  parse_semicolon () >>= fun _ ->
-                    result (VarDecl(token_content variable,
-                                    token_content type_name)))
+                  parse_semicolon () <+>
+                    (result (VarDecl(token_content variable,
+                                     token_content type_name))))
   in
   let parse_begin_end declarations =
     consume "BEGIN" >>= fun start_token2 ->
       until "END" (parse_statement ()) >>= fun statements ->
-        consume "END" <+> parse_semicolon () >>= fun _ ->
-          result (Block(declarations, statements))
+        consume "END" <+> parse_semicolon () <+>
+          (result (Block(declarations, statements)))
   in
     wrap_pos (lookahead >>= fun content ->
                 match content with

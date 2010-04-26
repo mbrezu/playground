@@ -18,7 +18,15 @@ modules = ["parserTypes",
            "pwm",
            "lexer",
            "plsqlParser",
-           "plsqlParserTests",
+
+           # tests
+           "testsCommon",
+           "lexerTests",
+           "pwmTests",
+           "exprTests",
+           "selectTests",
+           "stmtTests",
+           "tests",
            ]
 
 packages = ["oUnit"]

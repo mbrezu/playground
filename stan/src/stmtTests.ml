@@ -65,6 +65,56 @@ let test_parse_simple_complete_block_2 () =
                Pos (0, 40))]),
      Pos(0, 40));;
 
+let test_parse_select_1 () =
+  test_parse_helper
+    "SELECT a, b FROM c;"
+    []
+    (Program
+       [(StmtSelect
+           (Select
+              {fields =
+                  [(Column (Identifier "A", Pos (7, 7)), Pos (7, 7));
+                   (Column (Identifier "B", Pos (10, 10)), Pos (10, 10))];
+               clauses =
+                  [(FromClause [(TableName "C", Pos (17, 17))], Pos (12, 17))]},
+            Pos (0, 17)),
+         Pos (0, 18))],
+     Pos (0, 18));;
+
+let test_parse_select_1 () =
+  test_parse_helper
+    "SELECT a, b FROM c;"
+    []
+    (Program
+       [(StmtSelect
+           (Select
+              {fields =
+                  [(Column (Identifier "A", Pos (7, 7)), Pos (7, 7));
+                   (Column (Identifier "B", Pos (10, 10)), Pos (10, 10))];
+               clauses =
+                  [(FromClause [(TableName "C", Pos (17, 17))], Pos (12, 17))]},
+            Pos (0, 17)),
+         Pos (0, 18))],
+     Pos (0, 18));;
+
+let test_parse_select_2 () =
+  test_parse_helper
+    "BEGIN SELECT a, b FROM c; END;"
+    []
+    (Program
+       [(Block ([],
+                [(StmtSelect
+                    (Select
+                       {fields =
+                           [(Column (Identifier "A", Pos (13, 13)), Pos (13, 13));
+                            (Column (Identifier "B", Pos (16, 16)), Pos (16, 16))];
+                        clauses =
+                           [(FromClause [(TableName "C", Pos (23, 23))], Pos (18, 23))]},
+                     Pos (6, 23)),
+                  Pos (6, 24))]),
+         Pos (0, 29))],
+     Pos (0, 29));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -76,4 +126,6 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_simple_complete_block_1;
                                   "test_parse_simple_complete_block_2" >::
                                     test_parse_simple_complete_block_2;
+                                  "test_parse_select_1" >:: test_parse_select_1;
+                                  "test_parse_select_2" >:: test_parse_select_2;
                                 ]

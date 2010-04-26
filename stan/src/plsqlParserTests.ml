@@ -52,7 +52,9 @@ let test_pwm_consume_1 () =
   let result = run_parser (consume "BEGIN") (Stream(None, tokens), []) in
     match result with
       | [warning], None ->
-          assert_equal (Warning("Expected 'BEGIN' but reached end of input.", 0)) warning
+          assert_equal
+            (Warning(Error, "Expected 'BEGIN' but reached end of input.", 0))
+            warning
       | _ ->
           assert_failure "Expected a warning.";;
 
@@ -64,7 +66,7 @@ let test_pwm_consume_2 () =
   in
     match result with
       | [warning], None ->
-          assert_equal (Warning ("Expected 'BEGIN' but got 'END'.", 6)) warning
+          assert_equal (Warning (Error, "Expected 'BEGIN' but got 'END'.", 6)) warning
       | _ ->
           assert_failure "Expected a warning.";;
 
@@ -75,7 +77,9 @@ let test_pwm_until_eoi () =
   in
     match result with
       | [warning], None ->
-          assert_equal (Warning ("Expected 'END' but reached end of input.", 15)) warning
+          assert_equal
+            (Warning (Error, "Expected 'END' but reached end of input.", 15))
+            warning
       | _ ->
           assert_failure "Expected a warning.";;
 
@@ -85,7 +89,7 @@ let test_pwm_consume_or_fake () =
   let result = run_parser parser (Stream(None, tokens), []) in
     match result with
       | [warning], _ ->
-          assert_equal (Warning ("Expected ';'.", 8)) warning
+          assert_equal (Warning (Error, "Expected ';'.", 8)) warning
       | _ ->
           assert_failure "Expected a warning.";;
 
@@ -121,16 +125,16 @@ let test_parse_empty_block_with_decl () =
 let test_parse_begin_end_no_semicolon () =
   test_parse_helper
     "BEGIN END"
-    [Warning("Expected ';'.", 8)]
+    [Warning(Error, "Expected ';'.", 8)]
     (Program([Block([], []), Pos(0, 8)]), Pos(0, 8));
   test_parse_helper
     "DECLARE BEGIN END"
-    [Warning("Expected ';'.", 16)]
+    [Warning(Error, "Expected ';'.", 16)]
     (Program([Block([], []), Pos(0, 16)]), Pos(0, 16));
   test_parse_helper
     "DECLARE var int BEGIN END"
-    [Warning("Expected ';'.", 14);
-     Warning("Expected ';'.", 24)]
+    [Warning(Error, "Expected ';'.", 14);
+     Warning(Error, "Expected ';'.", 24)]
     (Program
        [(Block ([(VarDecl ("VAR", "INT"), Pos (8, 14))], []), Pos (0, 24))],
      Pos (0, 24));;

@@ -60,7 +60,7 @@ let get_previous_pos = ParserM (fun (stream, warnings) ->
 let warning warning_message =
   let warning_impl pos =
     ParserM (fun (stream, warnings) ->
-               let warning = Warning(warning_message, pos) in
+               let warning = Warning(Error, warning_message, pos) in
                let new_warnings = warning :: warnings in
                  new_warnings, Some (stream, ()))
   in
@@ -139,7 +139,7 @@ let consume_or_fake str =
                      let token = Token(str, pos) in
                      let (Pos(pos_start, _)) = pos in
                      let warning_message = sprintf "Expected '%s'." str in
-                     let new_warning = Warning(warning_message, pos_start) in
+                     let new_warning = Warning(Error, warning_message, pos_start) in
                        (new_warning :: warnings), Some (stream, token));;
 
 (* Parser that returns `true` if there aren't any symbols left in the

@@ -1,7 +1,9 @@
 
 type pos = Pos of int * int;;
 
-type warning = Warning of (string * int);;
+type warning_kind = Error | SkippedError | SkippedNotImplemented
+
+type warning = Warning of (warning_kind * string * int);;
 
 type token = Token of (string * pos);;
 

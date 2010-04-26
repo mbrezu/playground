@@ -8,7 +8,7 @@
 ** DONE `ANY`, `SOME`, `ALL`
 ** DONE list of items (expr, ...)
 ** DONE table expressions (joins)
-** TODO warnings have a type
+** DONE warnings have a type
 ** TODO statement ignore (with warning)
 ** TODO add tests for broken inputs (errors should be sane)
 

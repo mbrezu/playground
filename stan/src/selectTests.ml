@@ -233,7 +233,7 @@ let test_parse_group_by_1 () =
       []
       expected
 
-let test_parse_inner_join () =
+let test_parse_inner_join_1 () =
   let expected = (Select
                     {fields =
                         [(Column
@@ -254,16 +254,17 @@ let test_parse_inner_join () =
                                 (InnerJoin,
                                  (TableAlias ("TABLE1", "T1"), Pos (25, 33)),
                                  (TableAlias ("TABLE2", "T2"), Pos (46, 54)),
-                                 (BinaryOp ("=",
-                                            (BinaryOp (".",
-                                                       (Identifier "T1", Pos (59, 60)),
-                                                       (Identifier "F1", Pos (62, 63))),
-                                             Pos (59, 63)),
-                                            (BinaryOp (".",
-                                                       (Identifier "T2", Pos (67, 68)),
-                                                       (Identifier "F1", Pos (70, 71))),
-                                             Pos (67, 71))),
-                                  Pos (59, 71))),
+                                 Some (BinaryOp ("=",
+                                                 (BinaryOp (".",
+                                                            (Identifier "T1", Pos (59, 60)),
+                                                            (Identifier "F1", Pos (62, 63))),
+                                                  Pos (59, 63)),
+                                                 (BinaryOp (".",
+                                                            (Identifier "T2", Pos (67, 68)),
+                                                            (Identifier "F1", Pos (70, 71))),
+                                                  Pos (67, 71))),
+                                       Pos (59, 71)),
+                                 None),
                               Pos (25, 71))],
                           Pos (20, 71))]},
                   Pos (0, 71))
@@ -273,7 +274,28 @@ let test_parse_inner_join () =
       []
       expected
 
-let test_parse_outer_join () =
+let test_parse_inner_join_2 () =
+  let expected = (Select
+                    {fields =
+                        [(Column (Identifier "*", Pos (7, 7)),
+                          Pos (7, 7))];
+                     clauses =
+                        [(FromClause
+                            [(TableJoin (InnerJoin,
+                                         (TableAlias ("ADDRESSES", "A"), Pos (14, 24)),
+                                         (TableAlias ("CLIENTS", "C"), Pos (37, 45)),
+                                         None,
+                                         Some ["ADDRESSID"; "ADDRESSID"]),
+                              Pos (14, 74))],
+                          Pos (9, 74))]},
+                  Pos (0, 74))
+  in
+    test_parse_select_helper
+      "SELECT * FROM Addresses A INNER JOIN Clients C USING (AddressId, AddressId)"
+      []
+      expected
+
+let test_parse_outer_join_1 () =
   let expected = (Select
                     {fields =
                         [(Column
@@ -290,26 +312,68 @@ let test_parse_outer_join () =
                           Pos (14, 18))];
                      clauses =
                         [(FromClause
-                            [(TableJoin
-                                (OuterJoin,
-                                 (TableAlias ("TABLE1", "T1"), Pos (25, 33)),
-                                 (TableAlias ("TABLE2", "T2"), Pos (46, 54)),
-                                 (BinaryOp ("=",
-                                            (BinaryOp (".",
-                                                       (Identifier "T1", Pos (59, 60)),
-                                                       (Identifier "F1", Pos (62, 63))),
-                                             Pos (59, 63)),
-                                            (BinaryOp (".",
-                                                       (Identifier "T2", Pos (67, 68)),
-                                                       (Identifier "F1", Pos (70, 71))),
-                                             Pos (67, 71))),
-                                  Pos (59, 71))),
-                              Pos (25, 71))],
-                          Pos (20, 71))]},
-                  Pos (0, 71))
+                            [(TableJoin (FullOuterJoin,
+                                         (TableAlias ("TABLE1", "T1"), Pos (25, 33)),
+                                         (TableAlias ("TABLE2", "T2"), Pos (45, 53)),
+                                         Some
+                                           (BinaryOp ("=",
+                                                      (BinaryOp (".",
+                                                                 (Identifier "T1", Pos (58, 59)),
+                                                                 (Identifier "F1", Pos (61, 62))),
+                                                       Pos (58, 62)),
+                                                      (BinaryOp (".",
+                                                                 (Identifier "T2", Pos (66, 67)),
+                                                                 (Identifier "F1", Pos (69, 70))),
+                                                       Pos (66, 70))),
+                                            Pos (58, 70)),
+                                         None),
+                              Pos (25, 70))],
+                          Pos (20, 70))]},
+                  Pos (0, 70))
   in
     test_parse_select_helper
-      "SELECT t1.f1, t2.f2 FROM Table1 t1 OUTER JOIN Table2 t2 ON t1.f1 = t2.f1"
+      "SELECT t1.f1, t2.f2 FROM Table1 t1 FULL JOIN Table2 t2 ON t1.f1 = t2.f1"
+      []
+      expected
+
+let test_parse_outer_join_2 () =
+  let expected = (Select
+                    {fields =
+                        [(Column
+                            (BinaryOp (".",
+                                       (Identifier "T1", Pos (7, 8)),
+                                       (Identifier "F1", Pos (10, 11))),
+                             Pos (7, 11)),
+                          Pos (7, 11));
+                         (Column
+                            (BinaryOp (".",
+                                       (Identifier "T2", Pos (14, 15)),
+                                       (Identifier "F2", Pos (17, 18))),
+                             Pos (14, 18)),
+                          Pos (14, 18))];
+                     clauses =
+                        [(FromClause
+                            [(TableJoin (LeftOuterJoin,
+                                         (TableAlias ("TABLE1", "T1"), Pos (25, 33)),
+                                         (TableAlias ("TABLE2", "T2"), Pos (45, 53)),
+                                         Some
+                                           (BinaryOp ("=",
+                                                      (BinaryOp (".",
+                                                                 (Identifier "T1", Pos (58, 59)),
+                                                                 (Identifier "F1", Pos (61, 62))),
+                                                       Pos (58, 62)),
+                                                      (BinaryOp (".",
+                                                                 (Identifier "T2", Pos (66, 67)),
+                                                                 (Identifier "F1", Pos (69, 70))),
+                                                       Pos (66, 70))),
+                                            Pos (58, 70)),
+                                         None),
+                              Pos (25, 70))],
+                          Pos (20, 70))]},
+                  Pos (0, 70))
+  in
+    test_parse_select_helper
+      "SELECT t1.f1, t2.f2 FROM Table1 t1 LEFT JOIN Table2 t2 ON t1.f1 = t2.f1"
       []
       expected
 
@@ -337,49 +401,47 @@ let test_parse_many_join_1 () =
                      clauses =
                         [(FromClause
                             [(TableJoin (LeftOuterJoin,
-                                         (TableJoin (OuterJoin,
-                                                     (TableAlias ("TABLE1", "T1"),
-                                                      Pos (33, 41)),
-                                                     (TableAlias ("TABLE2", "T2"),
-                                                      Pos (54, 62)),
-                                                     (BinaryOp ("=",
-                                                                (BinaryOp (".",
-                                                                           (Identifier "T1",
-                                                                            Pos (67, 68)),
-                                                                           (Identifier "F1",
-                                                                            Pos (70, 71))),
-                                                                 Pos (67, 71)),
-                                                                (BinaryOp (".",
-                                                                           (Identifier "T2",
-                                                                            Pos (75, 76)),
-                                                                           (Identifier "F1",
-                                                                            Pos (78, 79))),
-                                                                 Pos (75, 79))),
-                                                      Pos (67, 79))),
-                                          Pos (33, 79)),
-                                         (TableAlias ("TABLE3", "T3"), Pos (97, 105)),
-                                         (BinaryOp ("=",
-                                                    (BinaryOp (".",
-                                                               (Identifier "T2",
-                                                                Pos (110, 111)),
-                                                               (Identifier "F2",
-                                                                Pos (113, 114))),
-                                                     Pos (110, 114)),
-                                                    (BinaryOp (".",
-                                                               (Identifier "T3",
-                                                                Pos (118, 119)),
-                                                               (Identifier "F1",
-                                                                Pos (121, 122))),
-                                                     Pos (118, 122))),
-                                          Pos (110, 122))),
-                              Pos (33, 122))],
-                          Pos (28, 122))]},
-                  Pos (1, 122))
+                                         (TableJoin (FullOuterJoin,
+                                                     (TableAlias ("TABLE1", "T1"), Pos (33, 41)),
+                                                     (TableAlias ("TABLE2", "T2"), Pos (53, 61)),
+                                                     Some
+                                                       (BinaryOp ("=",
+                                                                  (BinaryOp (".",
+                                                                             (Identifier "T1",
+                                                                              Pos (66, 67)),
+                                                                             (Identifier "F1",
+                                                                              Pos (69, 70))),
+                                                                   Pos (66, 70)),
+                                                                  (BinaryOp (".",
+                                                                             (Identifier "T2",
+                                                                              Pos (74, 75)),
+                                                                             (Identifier "F1",
+                                                                              Pos (77, 78))),
+                                                                   Pos (74, 78))),
+                                                        Pos (66, 78)),
+                                                     None),
+                                          Pos (33, 78)),
+                                         (TableAlias ("TABLE3", "T3"), Pos (96, 104)),
+                                         Some
+                                           (BinaryOp ("=",
+                                                      (BinaryOp (".",
+                                                                 (Identifier "T2", Pos (109, 110)),
+                                                                 (Identifier "F2", Pos (112, 113))),
+                                                       Pos (109, 113)),
+                                                      (BinaryOp (".",
+                                                                 (Identifier "T3", Pos (117, 118)),
+                                                                 (Identifier "F1", Pos (120, 121))),
+                                                       Pos (117, 121))),
+                                            Pos (109, 121)),
+                                         None),
+                              Pos (33, 121))],
+                          Pos (28, 121))]},
+                  Pos (1, 121))
   in
     test_parse_select_helper
       "
 SELECT t1.f1, t2.f2, t3.f2 FROM Table1 t1
-OUTER JOIN Table2 t2 ON t1.f1 = t2.f1
+FULL JOIN Table2 t2 ON t1.f1 = t2.f1
 LEFT OUTER JOIN Table3 t3 ON t2.f2 = t3.f1
 "
       []
@@ -471,8 +533,10 @@ let suite = "Select tests" >::: ["test_parse_simple_select_1" >::
                                  "test_parse_order_by_2" >:: test_parse_order_by_2;
                                  "test_parse_order_by_3" >:: test_parse_order_by_3;
                                  "test_parse_group_by_1" >:: test_parse_group_by_1;
-                                 "test_parse_inner_join" >:: test_parse_inner_join;
-                                 "test_parse_outer_join" >:: test_parse_outer_join;
+                                 "test_parse_inner_join_1" >:: test_parse_inner_join_1;
+                                 "test_parse_inner_join_2" >:: test_parse_inner_join_2;
+                                 "test_parse_outer_join_1" >:: test_parse_outer_join_1;
+                                 "test_parse_outer_join_2" >:: test_parse_outer_join_2;
                                  "test_parse_many_join_1" >:: test_parse_many_join_1;
                                  "test_parse_group_by_having_1" >::
                                    test_parse_group_by_having_1;

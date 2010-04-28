@@ -104,14 +104,15 @@ struct
     | List of expression_ast_with_pos list
   and expression_ast_with_pos = expression_ast * pos
 
-  and join_type = InnerJoin | OuterJoin | FullOuterJoin | LeftOuterJoin | RightOuterJoin
+  and join_type = InnerJoin | FullOuterJoin | LeftOuterJoin | RightOuterJoin
   and table_expression_ast =
     | TableAlias of string * string
     | TableName of string
     | TableJoin of join_type *
         table_expression_ast_with_pos *
         table_expression_ast_with_pos *
-        expression_ast_with_pos
+        expression_ast_with_pos option *
+        string list option
   and table_expression_ast_with_pos = table_expression_ast * pos
 
   and select_ast =
@@ -311,13 +312,10 @@ struct
   (* Expression ends, Select begins. *)
 
   and parse_select () =
-    let filter_maybe maybe_list =
-      maybe_list |> List.map (function | Some(x) -> [x] | None -> []) |> List.concat
-    in
-      wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
-                  parse_from_clause () >>= fun from_clause ->
-                    parse_select_clauses [] >>= fun clauses ->
-                      result <| Select { fields = fields; clauses = from_clause :: clauses })
+    wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
+                parse_from_clause () >>= fun from_clause ->
+                  parse_select_clauses [] >>= fun clauses ->
+                    result <| Select { fields = fields; clauses = from_clause :: clauses })
 
   and parse_select_clauses clauses =
     let clause_parser p =
@@ -400,20 +398,38 @@ struct
       lookahead_many 3 >>= function
         | Some[Token("INNER", _); Token("JOIN", _); _] ->
             join_parser 2 left InnerJoin
-        | Some[Token("OUTER", _); Token("JOIN", _); _] ->
-            join_parser 2 left OuterJoin
         | Some[Token("FULL", _); Token("OUTER", _); Token("JOIN", _)] ->
             join_parser 3 left FullOuterJoin
+        | Some[Token("FULL", _); Token("JOIN", _); _] ->
+            join_parser 2 left FullOuterJoin
         | Some[Token("LEFT", _); Token("OUTER", _); Token("JOIN", _)] ->
             join_parser 3 left LeftOuterJoin
+        | Some[Token("LEFT", _); Token("JOIN", _); _] ->
+            join_parser 2 left LeftOuterJoin
         | Some[Token("RIGHT", _); Token("OUTER", _); Token("JOIN", _)] ->
             join_parser 3 left RightOuterJoin
+        | Some[Token("RIGHT", _); Token("JOIN", _); _] ->
+            join_parser 2 left RightOuterJoin
         | _ -> result left
     and join_parser operator_length left join_kind =
-      (consume_many operator_length <+> (parse_table_with_alias ()) >>= fun right ->
-         consume "ON" <+> (parse_expression ()) >>= fun expr ->
-           pte_iter (TableJoin(join_kind, left, right, expr),
-                     combine_ast_pos left expr))
+      consume_many operator_length <+> (parse_table_with_alias ()) >>= fun right ->
+        lookahead >>= function
+          | Some(Token("ON", _)) ->
+              (consume "ON" <+> (parse_expression ()) >>= fun expr ->
+                 pte_iter (TableJoin(join_kind, left, right, Some expr, None),
+                           combine_ast_pos left expr))
+          | Some(Token("USING", _)) ->
+              (consume "USING"
+               <+> consume_or_fake "("
+               <+> (sep_by "," string_item) >>= fun columns ->
+                 consume_or_fake ")"
+                 <+> get_previous_pos >>= fun end_pos ->
+                   let (_, Pos(start_pos, _)) = left in
+                   pte_iter (TableJoin(join_kind, left, right, None, Some columns),
+                             Pos(start_pos, end_pos)))
+          | _ ->
+              warning "Expected 'ON' or 'USING'."
+              <+> wrap_pos (result <| TableJoin(join_kind, left, right, None, None))
     in
       parse_table_with_alias () >>= fun left ->
         pte_iter left

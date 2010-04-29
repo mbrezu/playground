@@ -399,6 +399,84 @@ let test_parse_expression_expr_list () =
   in
     test_parse_expr_helper "A >= Some (B, C, D)" [] expected;;
 
+let test_parse_expression_case_simple_1 () =
+  let expected = (SimpleCase
+                    ((Identifier "A", Pos (5, 5)),
+                     [CaseWhen
+                        ((NumericLiteral "100", Pos (12, 14)),
+                         (StringLiteral "'a'", Pos (21, 23)));
+                      CaseWhen
+                        ((NumericLiteral "200", Pos (30, 32)),
+                         (StringLiteral "'b'", Pos (39, 41)))],
+                     Some (StringLiteral "'c'", Pos (48, 50))),
+                  Pos (0, 54))
+  in
+    test_parse_expr_helper
+      "CASE a WHEN 100 THEN 'a' WHEN 200 THEN 'b' ELSE 'c' END"
+      []
+      expected;;
+
+let test_parse_expression_case_simple_2 () =
+  let expected = (SimpleCase
+                    ((Identifier "A", Pos (5, 5)),
+                     [CaseWhen
+                        ((NumericLiteral "100", Pos (12, 14)),
+                         (StringLiteral "'a'", Pos (21, 23)));
+                      CaseWhen
+                        ((NumericLiteral "200", Pos (30, 32)),
+                         (StringLiteral "'b'", Pos (39, 41)))],
+                     None),
+                  Pos (0, 45))
+  in
+    test_parse_expr_helper
+      "CASE a WHEN 100 THEN 'a' WHEN 200 THEN 'b' END"
+      []
+      expected;;
+
+let test_parse_expression_searched_case_1 () =
+  let expected = (SearchedCase
+                    ([CaseWhen
+                        ((BinaryOp ("<",
+                                    (Identifier "A", Pos (10, 10)),
+                                    (NumericLiteral "100", Pos (14, 16))),
+                          Pos (10, 16)),
+                         (StringLiteral "'a'", Pos (23, 25)));
+                      CaseWhen
+                        ((BinaryOp ("<",
+                                    (Identifier "A", Pos (32, 32)),
+                                    (NumericLiteral "200", Pos (36, 38))),
+                          Pos (32, 38)),
+                         (StringLiteral "'b'", Pos (45, 47)))],
+                     Some (StringLiteral "'c'", Pos (54, 56))),
+                  Pos (0, 60))
+  in
+    test_parse_expr_helper
+      "CASE WHEN a < 100 THEN 'a' WHEN a < 200 THEN 'b' ELSE 'c' END"
+      []
+      expected;;
+
+let test_parse_expression_searched_case_2 () =
+  let expected = (SearchedCase
+                    ([CaseWhen
+                        ((BinaryOp ("<",
+                                    (Identifier "A", Pos (10, 10)),
+                                    (NumericLiteral "100", Pos (14, 16))),
+                          Pos (10, 16)),
+                         (StringLiteral "'a'", Pos (23, 25)));
+                      CaseWhen
+                        ((BinaryOp ("<",
+                                    (Identifier "A", Pos (32, 32)),
+                                    (NumericLiteral "200", Pos (36, 38))),
+                          Pos (32, 38)),
+                         (StringLiteral "'b'", Pos (45, 47)))],
+                     None),
+                  Pos (0, 51))
+  in
+    test_parse_expr_helper
+      "CASE WHEN a < 100 THEN 'a' WHEN a < 200 THEN 'b' END"
+      []
+      expected;;
+
 let suite = "Expression tests" >::: ["test_parse_expression_simple_1" >::
                                        test_parse_expression_simple_1;
                                      "test_parse_expression_simple_2" >::
@@ -441,4 +519,12 @@ let suite = "Expression tests" >::: ["test_parse_expression_simple_1" >::
                                        test_parse_expression_some;
                                      "test_parse_expression_expr_list" >::
                                        test_parse_expression_expr_list;
+                                     "test_parse_expression_case_simple_1" >::
+                                       test_parse_expression_case_simple_1;
+                                     "test_parse_expression_case_simple_2" >::
+                                       test_parse_expression_case_simple_2;
+                                     "test_parse_expression_searched_case_1" >::
+                                       test_parse_expression_searched_case_1;
+                                     "test_parse_expression_searched_case_2" >::
+                                       test_parse_expression_searched_case_2;
                                     ]

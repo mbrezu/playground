@@ -102,6 +102,11 @@ struct
     | In of expression_ast_with_pos * expression_ast_with_pos
     | NotIn of expression_ast_with_pos * expression_ast_with_pos
     | List of expression_ast_with_pos list
+    | SimpleCase of (expression_ast_with_pos
+                     * case_when list
+                     * expression_ast_with_pos option)
+    | SearchedCase of (case_when list * expression_ast_with_pos option)
+  and case_when = CaseWhen of (expression_ast_with_pos * expression_ast_with_pos)
   and expression_ast_with_pos = expression_ast * pos
 
   and join_type = InnerJoin | FullOuterJoin | LeftOuterJoin | RightOuterJoin
@@ -198,6 +203,37 @@ struct
   and parse_string () =
     wrap_pos (string_item >>= fun str -> result <| StringLiteral str)
 
+  and parse_case () =
+    let rec parse_whens whens =
+      lookahead >>= function
+        | Some (Token("WHEN", _)) ->
+            (consume "WHEN" <+> parse_expression () >>= fun cond ->
+               consume_or_fake "THEN" <+> parse_expression () >>= fun result ->
+                 parse_whens <| CaseWhen(cond, result) :: whens)
+        | _ ->
+            result <| List.rev whens
+    in
+    let parse_else =
+      lookahead >>= function
+        | Some (Token("ELSE", _)) ->
+            (consume "ELSE" <+> parse_expression () >>= fun else_expr ->
+               consume_or_fake "END" <+>
+                 (result <| Some else_expr))
+        | _ ->
+            (consume_or_fake "END" <+>
+               (result None))
+    in
+      wrap_pos (consume "CASE" <+> lookahead >>= function
+                  | Some (Token("WHEN", _)) ->
+                      (parse_whens [] >>= fun whens ->
+                         parse_else >>= fun else_expr ->
+                           result <| SearchedCase(whens, else_expr))
+                  | _ ->
+                      (parse_expression () >>= fun expr ->
+                         parse_whens [] >>= fun whens ->
+                           parse_else >>= fun else_expr ->
+                             result <| SimpleCase(expr, whens, else_expr)))
+
   and parse_unary () =
     lookahead >>= function
       | Some (Token("(", _)) -> parse_parenthesis ()
@@ -215,8 +251,10 @@ struct
       | Some (Token("EXISTS", _)) ->
           wrap_pos (consume "EXISTS" <+> parse_expression () >>= fun expr ->
                       result <| Exists(expr))
-      | Some (Token(id, _)) when is_letter id.[0] || id.[0] = '_' || id.[0] = '*'
-          -> parse_dotted_identifier_or_function_call ()
+      | Some (Token("CASE", _)) ->
+          parse_case ()
+      | Some (Token(id, _)) when is_letter id.[0] || id.[0] = '_' || id.[0] = '*' ->
+          parse_dotted_identifier_or_function_call ()
       | _ ->
           warning "Expected an identifier, number or '('. Inserted a '_'." <+>
             get_next_pos >>= fun pos ->
@@ -497,8 +535,13 @@ let run_parser_helper parser tokens =
 let parse tokens =
   run_parser_helper plsql_parser tokens;;
 
+(* Helper functions for testing/debugging. *)
 let parse_expr tokens =
   run_parser_helper parse_expression tokens;;
 
 let parse_select_helper tokens =
   run_parser_helper parse_select tokens;;
+
+let parse_expr2 str =
+  let tokens, _ = tokenize str 0 in
+    parse_expr tokens

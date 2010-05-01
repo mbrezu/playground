@@ -243,8 +243,17 @@ struct
                            parse_else >>= fun else_expr ->
                              result <| SimpleCase(expr, whens, else_expr)))
 
+  and parse_unary_op () =
+    wrap_pos (lookahead >>= function
+                | Some(Token("-", _)) | Some(Token("+", _)) ->
+                    (string_item >>= fun op ->
+                       parse_unary () >>= fun expr ->
+                         result <| UnaryOp(op, expr))
+                | _ -> failwith "Internal error.")
+
   and parse_unary () =
     lookahead >>= function
+      | Some (Token("-", _)) | Some (Token("+", _)) -> parse_unary_op ()
       | Some (Token("(", _)) -> parse_parenthesis ()
       | Some (Token(num, _)) when check_all is_digit num -> parse_number ()
       | Some (Token(str, _)) when str.[0] = '\'' -> parse_string ()

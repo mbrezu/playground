@@ -9,6 +9,38 @@ open Ast;;
 
 let test_parse_expr_helper = parse_helper parse_expr;;
 
+let test_parse_expression_numeric_literal_1 () =
+  let expected = (NumericLiteral "100", Pos (0, 2)) in
+    test_parse_expr_helper "100" [] expected
+
+let test_parse_expression_numeric_literal_2 () =
+  let expected = (UnaryOp ("-",
+                           (NumericLiteral "100", Pos (1, 3))),
+                  Pos (0, 3))
+  in
+    test_parse_expr_helper "-100" [] expected
+
+let test_parse_expression_numeric_literal_3 () =
+  let expected = (UnaryOp ("+",
+                           (NumericLiteral "100", Pos (1, 3))),
+                  Pos (0, 3))
+  in
+    test_parse_expr_helper "+100" [] expected
+
+let test_parse_expression_numeric_literal_4 () =
+  let expected = (UnaryOp ("-",
+                           (UnaryOp ("+",
+                                     (NumericLiteral "100", Pos (2, 4))),
+                            Pos (1, 4))),
+                  Pos (0, 4))
+  in
+    test_parse_expr_helper "-+100" [] expected
+
+let test_parse_expression_string_literal_1 () =
+  let expected = (StringLiteral "'ABC'", Pos (0, 4))
+  in
+    test_parse_expr_helper "'ABC'" [] expected
+
 let test_parse_expression_simple_1 () =
   let expected = (BinaryOp("+",
                            (NumericLiteral "1", Pos(0, 0)),
@@ -491,7 +523,17 @@ let test_parse_expression_concat () =
       []
       expected;;
 
-let suite = "Expression tests" >::: ["test_parse_expression_simple_1" >::
+let suite = "Expression tests" >::: ["test_parse_expression_numeric_literal_1" >::
+                                       test_parse_expression_numeric_literal_1;
+                                     "test_parse_expression_numeric_literal_2" >::
+                                       test_parse_expression_numeric_literal_2;
+                                     "test_parse_expression_numeric_literal_3" >::
+                                       test_parse_expression_numeric_literal_3;
+                                     "test_parse_expression_numeric_literal_4" >::
+                                       test_parse_expression_numeric_literal_4;
+                                     "test_parse_expression_string_literal_1" >::
+                                       test_parse_expression_string_literal_1;
+                                     "test_parse_expression_simple_1" >::
                                        test_parse_expression_simple_1;
                                      "test_parse_expression_simple_2" >::
                                        test_parse_expression_simple_2;

@@ -477,6 +477,20 @@ let test_parse_expression_searched_case_2 () =
       []
       expected;;
 
+let test_parse_expression_concat () =
+  let expected = (BinaryOp ("||",
+                            (StringLiteral "'Prefix_'", Pos (0, 8)),
+                            (BinaryOp ("+",
+                                       (Identifier "A", Pos (14, 14)),
+                                       (NumericLiteral "2", Pos (18, 18))),
+                             Pos (13, 19))),
+                  Pos (0, 19))
+  in
+    test_parse_expr_helper
+      "'Prefix_' || (a + 2)"
+      []
+      expected;;
+
 let suite = "Expression tests" >::: ["test_parse_expression_simple_1" >::
                                        test_parse_expression_simple_1;
                                      "test_parse_expression_simple_2" >::
@@ -527,4 +541,6 @@ let suite = "Expression tests" >::: ["test_parse_expression_simple_1" >::
                                        test_parse_expression_searched_case_1;
                                      "test_parse_expression_searched_case_2" >::
                                        test_parse_expression_searched_case_2;
+                                     "test_parse_expression_concat" >::
+                                       test_parse_expression_concat;
                                     ]

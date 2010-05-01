@@ -339,7 +339,7 @@ struct
 
   and parse_expression () =
     let parse_term = parse_binary_op_left_assoc [["*"]; ["/"]] (parse_unary ()) in
-    let parse_arithmetic = parse_binary_op_left_assoc [["+"]; ["-"]] parse_term in
+    let parse_arithmetic = parse_binary_op_left_assoc [["+"]; ["-"]; ["|"; "|"]] parse_term in
     let rel_ops = [["<"; "="]; [">"; "="]; ["<"; ">"]; ["<"]; [">"]; ["="]] in
     let parse_relational = parse_binary_op_left_assoc rel_ops  parse_arithmetic in
     let parse_comparison = parse_comparison parse_relational in

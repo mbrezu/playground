@@ -113,10 +113,10 @@ let lookahead_many n =
                  else warnings, Some (stream, None));;
 
 (* Parse using `p` until next token has value `next`. *)
-let until next p =
+let until nexts p =
   let rec until_impl acc =
     lookahead >>= function
-      | Some(Token(token, _)) when token <> next ->
+      | Some(Token(token, _)) when (not <| List.mem token nexts) ->
           (p >>= fun res -> until_impl (res :: acc))
       | _ ->
           result (List.rev acc)

@@ -139,7 +139,16 @@ struct
     | VarDecl of string * string
     | StmtAssignment of string * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
+    | StmtIf of if_args
+  and if_args = expression_ast_with_pos
+      * plsql_ast_with_pos list
+      * else_elseif
+  and else_elseif =
+    | NoElse
+    | Else of (plsql_ast_with_pos list)
+    | ElsIf of if_args
   and plsql_ast_with_pos = plsql_ast * pos;;
+
 end;;
 
 open Ast;;
@@ -488,7 +497,37 @@ let rec parse_statement () =
     | Some (Token("BEGIN", _))
     | Some (Token("DECLARE", _)) -> parse_block ()
     | Some (Token("SELECT", _)) -> parse_select_statement ()
+    | Some (Token("IF", _)) -> parse_if_statement ()
     | _ -> parse_assignment ()
+
+and parse_if_statement () =
+  let rec parse_after_if () =
+    parse_expression >>= fun condition ->
+      consume_or_fake "THEN"
+      <+> until ["END"; "ELSIF"; "ELSE" ] (parse_statement ()) >>= fun then_statements ->
+        lookahead >>= function
+          | Some (Token("END", _)) ->
+              (consume "END"
+               <+> consume_or_fake "IF"
+               <+> parse_semicolon ()
+               <+> (result (condition, then_statements, NoElse)))
+          | Some (Token("ELSE", _)) ->
+              (consume "ELSE"
+               <+> until ["END"] (parse_statement ()) >>= fun else_statements ->
+                 consume "END"
+                 <+> consume_or_fake "IF"
+                 <+> parse_semicolon ()
+                 <+> (result (condition, then_statements, Else else_statements)))
+          | Some (Token("ELSIF", _)) ->
+              (consume "ELSIF"
+               <+> parse_after_if () >>= fun if_args ->
+                 result (condition, then_statements, ElsIf if_args))
+          | _ ->
+              warning "'END' or 'ELSE' or 'ELSIF' expected."
+              <+> (result (condition, then_statements, NoElse))
+  in
+    wrap_pos (consume "IF" <+> parse_after_if () >>= fun if_args ->
+                result <| StmtIf if_args)
 
 and parse_select_statement () =
   wrap_pos (parse_select >>= fun select ->
@@ -504,7 +543,7 @@ and parse_block () =
   in
   let parse_begin_end declarations =
     consume "BEGIN" >>= fun start_token2 ->
-      until "END" (parse_statement ()) >>= fun statements ->
+      until ["END"] (parse_statement ()) >>= fun statements ->
         consume "END" <+> parse_semicolon () <+>
           (result (Block(declarations, statements)))
   in
@@ -512,7 +551,7 @@ and parse_block () =
                 match content with
                   | Some(Token("DECLARE", _)) ->
                       (consume "DECLARE" >>= fun start_token ->
-                         until "BEGIN" parse_vardecl >>= fun declarations ->
+                         until ["BEGIN"] parse_vardecl >>= fun declarations ->
                            parse_begin_end declarations)
                   | _ ->
                       parse_begin_end [])
@@ -536,6 +575,10 @@ let parse tokens =
   run_parser_helper plsql_parser tokens;;
 
 (* Helper functions for testing/debugging. *)
+let parse2 str =
+  let tokens, _ = tokenize str 0 in
+    parse tokens;;
+
 let parse_expr tokens =
   run_parser_helper parse_expression tokens;;
 

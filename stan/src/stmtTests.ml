@@ -396,6 +396,121 @@ END LOOP;"
          Pos (1, 46))],
      Pos (1, 46));;
 
+let test_parse_exit () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := 1;
+  EXIT;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (NumericLiteral "1", Pos (23, 23))),
+                            Pos (18, 24));
+                           (StmtExit None, Pos (28, 32));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (41, 43))),
+                            Pos (36, 44))],
+                          None),
+                       Pos (11, 54))),
+         Pos (1, 54))],
+     Pos (1, 54));;
+
+let test_parse_exit_when () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := a + 1;
+  EXIT WHEN a = 5;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (BinaryOp ("+",
+                                                       (Identifier "A", Pos (23, 23)),
+                                                       (NumericLiteral "1", Pos (27, 27))),
+                                             Pos (23, 27))),
+                            Pos (18, 28));
+                           (StmtExitWhen
+                              ((BinaryOp ("=",
+                                          (Identifier "A", Pos (42, 42)),
+                                          (NumericLiteral "5", Pos (46, 46))),
+                                Pos (42, 46)),
+                               None),
+                            Pos (32, 47));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (56, 58))),
+                            Pos (51, 59))],
+                          None),
+                       Pos (11, 69))),
+         Pos (1, 69))],
+     Pos (1, 69));;
+
+let test_parse_exit_labeled () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := 1;
+  EXIT label;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (NumericLiteral "1", Pos (23, 23))),
+                            Pos (18, 24));
+                           (StmtExit (Some "LABEL"), Pos (28, 38));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (47, 49))),
+                            Pos (42, 50))],
+                          None),
+                       Pos (11, 60))),
+         Pos (1, 60))],
+     Pos (1, 60));;
+
+let test_parse_exit_when_labeled () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := 1;
+  EXIT label WHEN a = 5;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (NumericLiteral "1", Pos (23, 23))),
+                            Pos (18, 24));
+                           (StmtExitWhen
+                              ((BinaryOp ("=",
+                                          (Identifier "A", Pos (44, 44)),
+                                          (NumericLiteral "5", Pos (48, 48))),
+                                Pos (44, 48)),
+                               Some "LABEL"),
+                            Pos (28, 49));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (58, 60))),
+                            Pos (53, 61))],
+                          None),
+                       Pos (11, 71))),
+         Pos (1, 71))],
+     Pos (1, 71));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -419,4 +534,9 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_basic_loop_1" >:: test_parse_basic_loop_1;
                                   "test_parse_basic_loop_2" >:: test_parse_basic_loop_2;
                                   "test_parse_basic_loop_3" >:: test_parse_basic_loop_3;
+                                  "test_parse_exit" >:: test_parse_exit;
+                                  "test_parse_exit_when" >:: test_parse_exit_when;
+                                  "test_parse_exit_labeled" >:: test_parse_exit_labeled;
+                                  "test_parse_exit_when_labeled" >::
+                                    test_parse_exit_when_labeled;
                                 ]

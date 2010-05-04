@@ -144,6 +144,8 @@ struct
     | StmtLabeled of string * plsql_ast_with_pos
     | StmtExit of string option
     | StmtExitWhen of expression_ast_with_pos * string option
+    | StmtContinue of string option
+    | StmtContinueWhen of expression_ast_with_pos * string option
   and if_args = expression_ast_with_pos
       * plsql_ast_with_pos list
       * else_elseif
@@ -515,23 +517,30 @@ let rec parse_statement () =
     | Some (Token("IF", _)) -> parse_if_statement ()
     | Some (Token("LOOP", _)) -> parse_loop_statement ()
     | Some (Token("<", _)) -> parse_label ()
-    | Some (Token("EXIT", _)) -> parse_exit ()
+    | Some (Token("EXIT", _)) ->
+        let simple maybe_label = StmtExit(maybe_label) in
+        let with_when cond maybe_label = StmtExitWhen(cond, maybe_label) in
+          parse_exit_or_continue "EXIT" simple with_when
+    | Some (Token("CONTINUE", _)) ->
+        let simple maybe_label = StmtContinue(maybe_label) in
+        let with_when cond maybe_label = StmtContinueWhen(cond, maybe_label) in
+          parse_exit_or_continue "CONTINUE" simple with_when
     | _ -> parse_assignment ()
 
-and parse_exit () =
-  wrap_pos (consume "EXIT" <+> lookahead >>= function
+and parse_exit_or_continue exit_continue simple with_when  =
+  wrap_pos (consume exit_continue <+> lookahead >>= function
               | Some (Token("WHEN", _)) ->
                   (consume "WHEN" <+> parse_expression >>= fun cond ->
-                     parse_semicolon <+> (result <| StmtExitWhen(cond, None)))
+                     parse_semicolon <+> (result <| with_when cond None))
               | Some (Token(label, _)) when label <> ";" ->
                   (consume label <+> lookahead >>= function
                      | Some (Token("WHEN", _)) ->
                          (consume "WHEN" <+> parse_expression >>= fun cond ->
-                            parse_semicolon <+> (result <| StmtExitWhen(cond, Some label)))
+                            parse_semicolon <+> (result <| with_when cond (Some label)))
                      | _ ->
-                         (parse_semicolon <+> (result <| StmtExit(Some label))))
+                         (parse_semicolon <+> (result <| simple (Some label))))
               | _ ->
-                  (parse_semicolon <+> (result <| StmtExit(None))))
+                  (parse_semicolon <+> (result <| simple None)))
 
 and parse_label () =
   wrap_pos (consume "<" <+> consume "<" <+> string_item >>= fun label ->

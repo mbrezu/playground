@@ -511,6 +511,121 @@ END LOOP;"
          Pos (1, 71))],
      Pos (1, 71));;
 
+let test_parse_continue () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := 1;
+  CONTINUE;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (NumericLiteral "1", Pos (23, 23))),
+                            Pos (18, 24));
+                           (StmtContinue None, Pos (28, 36));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (45, 47))),
+                            Pos (40, 48))],
+                          None),
+                       Pos (11, 58))),
+         Pos (1, 58))],
+     Pos (1, 58));;
+
+let test_parse_continue_when () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := a + 1;
+  CONTINUE WHEN a = 5;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (BinaryOp ("+",
+                                                       (Identifier "A", Pos (23, 23)),
+                                                       (NumericLiteral "1", Pos (27, 27))),
+                                             Pos (23, 27))),
+                            Pos (18, 28));
+                           (StmtContinueWhen
+                              ((BinaryOp ("=",
+                                          (Identifier "A", Pos (46, 46)),
+                                          (NumericLiteral "5", Pos (50, 50))),
+                                Pos (46, 50)),
+                               None),
+                            Pos (32, 51));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (60, 62))),
+                            Pos (55, 63))],
+                          None),
+                       Pos (11, 73))),
+         Pos (1, 73))],
+     Pos (1, 73));;
+
+let test_parse_continue_labeled () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := 1;
+  CONTINUE label;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (NumericLiteral "1", Pos (23, 23))),
+                            Pos (18, 24));
+                           (StmtContinue (Some "LABEL"), Pos (28, 42));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (51, 53))),
+                            Pos (46, 54))],
+                          None),
+                       Pos (11, 64))),
+         Pos (1, 64))],
+     Pos (1, 64));;
+
+let test_parse_continue_when_labeled () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := 1;
+  CONTINUE label WHEN a = 5;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (NumericLiteral "1", Pos (23, 23))),
+                            Pos (18, 24));
+                           (StmtContinueWhen
+                              ((BinaryOp ("=",
+                                          (Identifier "A", Pos (48, 48)),
+                                          (NumericLiteral "5", Pos (52, 52))),
+                                Pos (48, 52)),
+                               Some "LABEL"),
+                            Pos (28, 53));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (62, 64))),
+                            Pos (57, 65))],
+                          None),
+                       Pos (11, 75))),
+         Pos (1, 75))],
+     Pos (1, 75));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -539,4 +654,10 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_exit_labeled" >:: test_parse_exit_labeled;
                                   "test_parse_exit_when_labeled" >::
                                     test_parse_exit_when_labeled;
+                                  "test_parse_continue" >:: test_parse_continue;
+                                  "test_parse_continue_when" >:: test_parse_continue_when;
+                                  "test_parse_continue_labeled" >::
+                                    test_parse_continue_labeled;
+                                  "test_parse_continue_when_labeled" >::
+                                    test_parse_continue_when_labeled;
                                 ]

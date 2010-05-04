@@ -109,7 +109,7 @@ struct
   and case_when = CaseWhen of (expression_ast_with_pos * expression_ast_with_pos)
   and expression_ast_with_pos = expression_ast * pos
 
-  and join_type = InnerJoin | FullOuterJoin | LeftOuterJoin | RightOuterJoin
+  and join_type = Join | InnerJoin | FullOuterJoin | LeftOuterJoin | RightOuterJoin
   and table_expression_ast =
     | TableAlias of string * string
     | TableName of string
@@ -456,6 +456,8 @@ struct
   and parse_table_expression () =
     let rec pte_iter left =
       lookahead_many 3 >>= function
+        | Some[Token("JOIN", _); _; _] ->
+            join_parser 1 left Join
         | Some[Token("INNER", _); Token("JOIN", _); _] ->
             join_parser 2 left InnerJoin
         | Some[Token("FULL", _); Token("OUTER", _); Token("JOIN", _)] ->
@@ -629,6 +631,10 @@ let parse_expr tokens =
 
 let parse_select_helper tokens =
   run_parser_helper parse_select tokens;;
+
+let parse_select2 str =
+  let tokens, _ = tokenize str 0 in
+    parse_select_helper tokens;;
 
 let parse_expr2 str =
   let tokens, _ = tokenize str 0 in

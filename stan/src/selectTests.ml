@@ -295,6 +295,47 @@ let test_parse_inner_join_2 () =
       []
       expected
 
+let test_parse_inner_join_3 () =
+  let expected = (Select
+                    {fields =
+                        [(Column
+                            (BinaryOp (".",
+                                       (Identifier "T1", Pos (7, 8)),
+                                       (Identifier "F1", Pos (10, 11))),
+                             Pos (7, 11)),
+                          Pos (7, 11));
+                         (Column
+                            (BinaryOp (".",
+                                       (Identifier "T2", Pos (14, 15)),
+                                       (Identifier "F2", Pos (17, 18))),
+                             Pos (14, 18)),
+                          Pos (14, 18))];
+                     clauses =
+                        [(FromClause
+                            [(TableJoin (Join,
+                                         (TableAlias ("TABLE1", "T1"), Pos (25, 33)),
+                                         (TableAlias ("TABLE2", "T2"), Pos (40, 48)),
+                                         Some
+                                           (BinaryOp ("=",
+                                                      (BinaryOp (".",
+                                                                 (Identifier "T1", Pos (53, 54)),
+                                                                 (Identifier "F1", Pos (56, 57))),
+                                                       Pos (53, 57)),
+                                                      (BinaryOp (".",
+                                                                 (Identifier "T2", Pos (61, 62)),
+                                                                 (Identifier "F1", Pos (64, 65))),
+                                                       Pos (61, 65))),
+                                            Pos (53, 65)),
+                                         None),
+                              Pos (25, 65))],
+                          Pos (20, 65))]},
+                  Pos (0, 65))
+  in
+    test_parse_select_helper
+      "SELECT t1.f1, t2.f2 FROM Table1 t1 JOIN Table2 t2 ON t1.f1 = t2.f1"
+      []
+      expected
+
 let test_parse_outer_join_1 () =
   let expected = (Select
                     {fields =
@@ -535,6 +576,7 @@ let suite = "Select tests" >::: ["test_parse_simple_select_1" >::
                                  "test_parse_group_by_1" >:: test_parse_group_by_1;
                                  "test_parse_inner_join_1" >:: test_parse_inner_join_1;
                                  "test_parse_inner_join_2" >:: test_parse_inner_join_2;
+                                 "test_parse_inner_join_3" >:: test_parse_inner_join_3;
                                  "test_parse_outer_join_1" >:: test_parse_outer_join_1;
                                  "test_parse_outer_join_2" >:: test_parse_outer_join_2;
                                  "test_parse_many_join_1" >:: test_parse_many_join_1;

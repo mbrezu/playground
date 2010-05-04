@@ -330,6 +330,72 @@ ELSE b := 2; END IF;"
          Pos (1, 104))],
      Pos (1, 104));;
 
+let test_parse_basic_loop_1 () =
+  test_parse_helper
+    "
+LOOP
+  a := 1;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLoop
+           ([(StmtAssignment ("A",
+                              (NumericLiteral "1", Pos (13, 13))),
+              Pos (8, 14));
+             (StmtAssignment ("B",
+                              (StringLiteral "'a'", Pos (23, 25))),
+              Pos (18, 26))],
+            None),
+         Pos (1, 36))],
+     Pos (1, 36));;
+
+let test_parse_basic_loop_2 () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := 1;
+  b := 'a';
+END LOOP label;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (NumericLiteral "1", Pos (23, 23))),
+                            Pos (18, 24));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (33, 35))),
+                            Pos (28, 36))],
+                          Some "LABEL"),
+                       Pos (11, 52))),
+         Pos (1, 52))],
+     Pos (1, 52));;
+
+let test_parse_basic_loop_3 () =
+  test_parse_helper
+    "
+<<label>>
+LOOP
+  a := 1;
+  b := 'a';
+END LOOP;"
+    []
+    (Program
+       [(StmtLabeled ("LABEL",
+                      (StmtLoop
+                         ([(StmtAssignment ("A",
+                                            (NumericLiteral "1", Pos (23, 23))),
+                            Pos (18, 24));
+                           (StmtAssignment ("B",
+                                            (StringLiteral "'a'", Pos (33, 35))),
+                            Pos (28, 36))],
+                          None),
+                       Pos (11, 46))),
+         Pos (1, 46))],
+     Pos (1, 46));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -350,4 +416,7 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_if_5" >:: test_parse_if_5;
                                   "test_parse_if_6" >:: test_parse_if_6;
                                   "test_parse_if_7" >:: test_parse_if_7;
+                                  "test_parse_basic_loop_1" >:: test_parse_basic_loop_1;
+                                  "test_parse_basic_loop_2" >:: test_parse_basic_loop_2;
+                                  "test_parse_basic_loop_3" >:: test_parse_basic_loop_3;
                                 ]

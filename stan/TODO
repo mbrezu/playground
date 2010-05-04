@@ -13,6 +13,8 @@
 *** DONE OUTER is optional, not FULL. It is also optional for LEFT/RIGHT
 *** DONE add the USING Clause
 ** DONE CASE in SELECT
+** DONE IF/THEN/ELSE/ELSIF
+** TODO LOOP statement
 ** TODO statement ignore (with warning)
 ** TODO add tests for broken inputs (errors should be sane)
 

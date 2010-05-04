@@ -146,6 +146,11 @@ struct
     | StmtExitWhen of expression_ast_with_pos * string option
     | StmtContinue of string option
     | StmtContinueWhen of expression_ast_with_pos * string option
+    | StmtFor of expression_ast_with_pos *
+        bool *
+        expression_ast_with_pos *
+        expression_ast_with_pos *
+        plsql_ast_with_pos
   and if_args = expression_ast_with_pos
       * plsql_ast_with_pos list
       * else_elseif
@@ -162,6 +167,7 @@ open Ast;;
 module ExpressionAndSelect :
 sig
   val parse_expression : (token, expression_ast_with_pos) parser;;
+  val parse_dotted_identifier : (token, expression_ast_with_pos) parser;;
   val parse_select : (token, select_ast_with_pos) parser;;
 end =
 struct
@@ -505,6 +511,8 @@ struct
 
   let parse_expression = parse_expression ();;
 
+  let parse_dotted_identifier = parse_dotted_identifier ();
+
 end;;
 
 open ExpressionAndSelect;;
@@ -516,6 +524,7 @@ let rec parse_statement () =
     | Some (Token("SELECT", _)) -> parse_select_statement ()
     | Some (Token("IF", _)) -> parse_if_statement ()
     | Some (Token("LOOP", _)) -> parse_loop_statement ()
+    | Some (Token("FOR", _)) -> parse_for_statement ()
     | Some (Token("<", _)) -> parse_label ()
     | Some (Token("EXIT", _)) ->
         let simple maybe_label = StmtExit(maybe_label) in
@@ -526,6 +535,27 @@ let rec parse_statement () =
         let with_when cond maybe_label = StmtContinueWhen(cond, maybe_label) in
           parse_exit_or_continue "CONTINUE" simple with_when
     | _ -> parse_assignment ()
+
+and parse_for_statement () =
+  let parse_for index_variable reversed =
+    parse_expression >>= fun index_start ->
+      consume "." <+> consume "." <+> parse_expression >>= fun index_end ->
+        lookahead >>= function
+          | Some(Token("LOOP", _)) ->
+              (parse_loop_statement () >>= fun loop_statement ->
+                 result <| StmtFor(index_variable,
+                                   reversed,
+                                   index_start,
+                                   index_end,
+                                   loop_statement))
+          | _ -> error "Expected 'LOOP'."
+  in
+    wrap_pos (consume "FOR" <+> parse_dotted_identifier >>= fun index_variable ->
+                consume "IN" <+> lookahead >>= function
+                  | Some(Token("REVERSE", _)) ->
+                      consume "REVERSE" <+> parse_for index_variable true
+                  | _ ->
+                      parse_for index_variable false)
 
 and parse_exit_or_continue exit_continue simple with_when  =
   wrap_pos (consume exit_continue <+> lookahead >>= function

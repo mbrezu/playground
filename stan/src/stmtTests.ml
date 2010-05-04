@@ -626,6 +626,111 @@ END LOOP;"
          Pos (1, 75))],
      Pos (1, 75));;
 
+let test_parse_for_1 () =
+  test_parse_helper
+    "
+FOR i IN 1..10 LOOP
+  a := a + i;
+END LOOP;"
+    []
+    (Program
+       [(StmtFor ((Identifier "I", Pos (5, 5)),
+                  false,
+                  (NumericLiteral "1", Pos (10, 10)),
+                  (NumericLiteral "10", Pos (13, 14)),
+                  (StmtLoop
+                     ([(StmtAssignment ("A",
+                                        (BinaryOp ("+",
+                                                   (Identifier "A", Pos (28, 28)),
+                                                   (Identifier "I", Pos (32, 32))),
+                                         Pos (28, 32))),
+                        Pos (23, 33))],
+                      None),
+                   Pos (16, 43))),
+         Pos (1, 43))],
+     Pos (1, 43));;
+
+let test_parse_for_2 () =
+  test_parse_helper
+    "
+FOR i IN REVERSE 1..10 LOOP
+  a := a + i;
+END LOOP;"
+    []
+    (Program
+       [(StmtFor ((Identifier "I", Pos (5, 5)),
+                  true,
+                  (NumericLiteral "1", Pos (18, 18)),
+                  (NumericLiteral "10", Pos (21, 22)),
+                  (StmtLoop
+                     ([(StmtAssignment ("A",
+                                        (BinaryOp ("+",
+                                                   (Identifier "A", Pos (36, 36)),
+                                                   (Identifier "I", Pos (40, 40))),
+                                         Pos (36, 40))),
+                        Pos (31, 41))],
+                      None),
+                   Pos (24, 51))),
+         Pos (1, 51))],
+     Pos (1, 51));;
+
+let test_parse_for_3 () =
+  test_parse_helper
+    "
+<<lup>>
+FOR i IN REVERSE 1..10 LOOP
+  a := a + i;
+END LOOP lup;"
+    []
+    (Program
+       [(StmtLabeled ("LUP",
+                      (StmtFor ((Identifier "I", Pos (13, 13)),
+                                true,
+                                (NumericLiteral "1", Pos (26, 26)),
+                                (NumericLiteral "10", Pos (29, 30)),
+                                (StmtLoop
+                                   ([(StmtAssignment ("A",
+                                                      (BinaryOp ("+",
+                                                                 (Identifier "A", Pos (44, 44)),
+                                                                 (Identifier "I", Pos (48, 48))),
+                                                       Pos (44, 48))),
+                                      Pos (39, 49))],
+                                    Some "LUP"),
+                                 Pos (32, 63))),
+                       Pos (9, 63))),
+         Pos (1, 63))],
+     Pos (1, 63));;
+
+let test_parse_for_4 () =
+  test_parse_helper
+    "
+<<lup>>
+FOR lup.i IN REVERSE 1..10 LOOP
+  a := a + i;
+END LOOP lup;"
+    []
+    (Program
+       [(StmtLabeled ("LUP",
+                      (StmtFor
+                         ((BinaryOp (".",
+                                     (Identifier "LUP", Pos (13, 15)),
+                                     (Identifier "I", Pos (17, 17))),
+                           Pos (13, 17)),
+                          true, (NumericLiteral "1", Pos (30, 30)),
+                          (NumericLiteral "10", Pos (33, 34)),
+                          (StmtLoop
+                             ([(StmtAssignment ("A",
+                                                (BinaryOp ("+",
+                                                           (Identifier "A", Pos (48, 48)),
+                                                           (Identifier "I", Pos (52, 52))),
+                                                 Pos (48, 52))),
+                                Pos (43, 53))],
+                              Some "LUP"),
+                           Pos (36, 67))),
+                       Pos (9, 67))),
+         Pos (1, 67))],
+     Pos (1, 67));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -637,8 +742,10 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_simple_complete_block_1;
                                   "test_parse_simple_complete_block_2" >::
                                     test_parse_simple_complete_block_2;
+
                                   "test_parse_select_1" >:: test_parse_select_1;
                                   "test_parse_select_2" >:: test_parse_select_2;
+
                                   "test_parse_if_1" >:: test_parse_if_1;
                                   "test_parse_if_2" >:: test_parse_if_2;
                                   "test_parse_if_3" >:: test_parse_if_3;
@@ -646,18 +753,26 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_if_5" >:: test_parse_if_5;
                                   "test_parse_if_6" >:: test_parse_if_6;
                                   "test_parse_if_7" >:: test_parse_if_7;
+
                                   "test_parse_basic_loop_1" >:: test_parse_basic_loop_1;
                                   "test_parse_basic_loop_2" >:: test_parse_basic_loop_2;
                                   "test_parse_basic_loop_3" >:: test_parse_basic_loop_3;
+
                                   "test_parse_exit" >:: test_parse_exit;
                                   "test_parse_exit_when" >:: test_parse_exit_when;
                                   "test_parse_exit_labeled" >:: test_parse_exit_labeled;
                                   "test_parse_exit_when_labeled" >::
                                     test_parse_exit_when_labeled;
+
                                   "test_parse_continue" >:: test_parse_continue;
                                   "test_parse_continue_when" >:: test_parse_continue_when;
                                   "test_parse_continue_labeled" >::
                                     test_parse_continue_labeled;
                                   "test_parse_continue_when_labeled" >::
                                     test_parse_continue_when_labeled;
+
+                                  "test_parse_for_1" >:: test_parse_for_1;
+                                  "test_parse_for_2" >:: test_parse_for_2;
+                                  "test_parse_for_3" >:: test_parse_for_3;
+                                  "test_parse_for_4" >:: test_parse_for_4;
                                 ]

@@ -678,3 +678,19 @@ let parse_select2 str =
 let parse_expr2 str =
   let tokens, _ = tokenize str 0 in
     parse_expr tokens
+
+let time_it n p =
+  let rec repeat n p =
+    if n = 0
+    then 0
+    else
+      let _ = p () in
+        repeat (n - 1) p
+  in
+  let t1 = Sys.time () in
+  let _ = repeat n p in
+  let t2 = Sys.time () in
+    t2 -. t1;;
+
+let time_parse n p str =
+  time_it n (fun _ -> p str);;

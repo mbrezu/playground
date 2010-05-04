@@ -13,26 +13,28 @@ def forceRun(cmd):
     set_force_build(False)
     if status: sys.exit(status)
 
-modules = ["parserTypes",
-           "utils",
-           "pwm",
-           "lexer",
-           "plsqlParser",
+base_modules = ["parserTypes",
+                "utils",
+                "pwm",
+                "lexer",
+                "plsqlParser",
+                ]
 
-           # tests
-           "testsCommon",
-           "lexerTests",
-           "pwmTests",
-           "exprTests",
-           "selectTests",
-           "stmtTests",
-           "tests",
-           ]
+tests_modules = ["testsCommon",
+                 "lexerTests",
+                 "pwmTests",
+                 "exprTests",
+                 "selectTests",
+                 "stmtTests",
+                 "tests",
+                 ]
+
+speed_modules = ["speed",
+                 ]
 
 packages = ["oUnit"]
 
-def tests(compiler, object_extension):
-    global modules
+def compile_run(compiler, object_extension, modules, executable):
     global packages
     package_list = ",".join(packages)
     run("mkdir -p bin/tests")
@@ -42,10 +44,25 @@ def tests(compiler, object_extension):
                                                                       module) )
     object_list = " ".join(["src/%s.%s" % (module, object_extension)
                             for module in modules])
-    run("ocamlfind %s -thread -o bin/tests/test -linkpkg -package %s %s" % (compiler,
-                                                                            package_list,
-                                                                            object_list))
-    forceRun("bin/tests/test")
+    run("ocamlfind %s -thread -o %s -linkpkg -package %s %s" % (compiler,
+                                                                executable,
+                                                                package_list,
+                                                                object_list))
+    forceRun(executable)
+
+def tests(compiler, object_extension):
+    global base_modules, tests_modules
+    compile_run(compiler,
+                object_extension,
+                base_modules + tests_modules,
+                "bin/tests/test")
+
+def speed(compiler, object_extension):
+    global base_modules, speed_modules
+    compile_run(compiler,
+                object_extension,
+                base_modules + speed_modules,
+                "bin/tests/speed")
 
 def clean():
     forceRun("rm -rf bin")
@@ -61,5 +78,9 @@ elif sys.argv[1] == "tests":
     tests("ocamlc", "cmo")
 elif sys.argv[1] == "testsopt":
     tests("ocamlopt", "cmx")
+elif sys.argv[1] == "speed":
+    speed("ocamlc", "cmo")
+elif sys.argv[1] == "speedopt":
+    speed("ocamlopt", "cmx")
 else:
     print "unknown command " + sys.argv[1]

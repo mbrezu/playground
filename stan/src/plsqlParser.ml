@@ -137,7 +137,7 @@ struct
     | Program of plsql_ast_with_pos list
     | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
     | VarDecl of string * string
-    | StmtAssignment of string * expression_ast_with_pos
+    | StmtAssignment of expression_ast_with_pos * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
     | StmtIf of if_args
     | StmtLoop of plsql_ast_with_pos list * string option
@@ -151,6 +151,10 @@ struct
         expression_ast_with_pos *
         expression_ast_with_pos *
         plsql_ast_with_pos
+    | StmtWhile of expression_ast_with_pos * plsql_ast_with_pos
+    | StmtGoto of expression_ast_with_pos
+    | StmtNull
+    | StmtCall of expression_ast_with_pos * expression_ast_with_pos list
   and if_args = expression_ast_with_pos
       * plsql_ast_with_pos list
       * else_elseif
@@ -525,6 +529,9 @@ let rec parse_statement () =
     | Some (Token("IF", _)) -> parse_if_statement ()
     | Some (Token("LOOP", _)) -> parse_loop_statement ()
     | Some (Token("FOR", _)) -> parse_for_statement ()
+    | Some (Token("WHILE", _)) -> parse_while_statement ()
+    | Some (Token("GOTO", _)) -> parse_goto_statement ()
+    | Some (Token("NULL", _)) -> parse_null_statement ()
     | Some (Token("<", _)) -> parse_label ()
     | Some (Token("EXIT", _)) ->
         let simple maybe_label = StmtExit(maybe_label) in
@@ -534,7 +541,19 @@ let rec parse_statement () =
         let simple maybe_label = StmtContinue(maybe_label) in
         let with_when cond maybe_label = StmtContinueWhen(cond, maybe_label) in
           parse_exit_or_continue "CONTINUE" simple with_when
-    | _ -> parse_assignment ()
+    | _ -> parse_assignment_or_call ()
+
+and parse_null_statement () =
+  wrap_pos (consume "NULL" <+> parse_semicolon <+> (result StmtNull))
+
+and parse_while_statement () =
+  wrap_pos (consume "WHILE" <+> parse_expression >>= fun expr ->
+              parse_loop_statement () >>= fun loop ->
+                result <| StmtWhile(expr, loop))
+
+and parse_goto_statement () =
+  wrap_pos (consume "GOTO" <+> parse_dotted_identifier >>= fun label ->
+              parse_semicolon <+> (result <| StmtGoto(label)))
 
 and parse_for_statement () =
   let parse_for index_variable reversed =
@@ -642,11 +661,24 @@ and parse_block () =
                   | _ ->
                       parse_begin_end [])
 
-and parse_assignment () =
-  wrap_pos (item >>= fun var_name ->
-              consume ":" <+> consume "=" <+> parse_expression >>= fun expression ->
-                parse_semicolon <+>
-                  result (StmtAssignment(token_content var_name, expression)));;
+and parse_assignment_or_call () =
+  let parse_assignment var_name =
+    consume ":" <+> consume "=" <+> parse_expression >>= fun expression ->
+      parse_semicolon <+>
+        result (StmtAssignment(var_name, expression))
+  in
+  let parse_call subprogram_name =
+    consume "(" <+> sep_by "," parse_expression >>= fun args ->
+      consume_or_fake ")"
+      <+> parse_semicolon
+      <+> (result <| StmtCall(subprogram_name, args))
+  in
+  wrap_pos (parse_dotted_identifier >>= fun name ->
+              lookahead >>= function
+                | Some (Token(":", _)) ->
+                    parse_assignment name
+                | _ ->
+                    parse_call name)
 
 let plsql_parser =
   until_eoi <| parse_statement () >>= fun statements ->

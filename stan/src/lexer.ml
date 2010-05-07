@@ -46,7 +46,8 @@ let tokenize str start_pos =
       let cont new_pos parsed = tokenize' str new_pos (parsed :: acc) in
       let firstChar = str.[start_pos] in
         if is_letter firstChar then
-          let parsed, new_pos = lex_while str start_pos is_alnum in
+          let ident_pred ch = is_alnum ch || ch = '_' in
+          let parsed, new_pos = lex_while str start_pos ident_pred in
             cont new_pos parsed
         else if is_digit firstChar then
           let parsed, new_pos = lex_while str start_pos is_digit in

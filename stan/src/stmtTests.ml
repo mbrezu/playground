@@ -23,10 +23,16 @@ let test_parse_declare_begin_end () =
 
 let test_parse_empty_block_with_decl () =
   test_parse_helper
-    "DECLARE var INTEGER; BEGIN END;"
+    "DECLARE var NUMBER(3); BEGIN END;"
     []
-    (Program([Block([VarDecl("VAR", "INTEGER"), Pos(8, 19)], []), Pos(0, 30)]),
-     Pos(0, 30));;
+    (Program
+       [(Block
+           ([(VarDecl ("VAR",
+                       (Number (3, 0), Pos (12, 20))),
+              Pos (8, 21))],
+            []),
+         Pos (0, 32))],
+     Pos (0, 32));;
 
 let test_parse_begin_end_no_semicolon () =
   test_parse_helper
@@ -38,34 +44,47 @@ let test_parse_begin_end_no_semicolon () =
     [Warning(Error, "Expected ';'.", 16)]
     (Program([Block([], []), Pos(0, 16)]), Pos(0, 16));
   test_parse_helper
-    "DECLARE var int BEGIN END"
-    [Warning(Error, "Expected ';'.", 14);
-     Warning(Error, "Expected ';'.", 24)]
+    "DECLARE var NUMBER(3) BEGIN END"
+    [Warning(Error, "Expected ';'.", 20);
+     Warning(Error, "Expected ';'.", 30)]
     (Program
-       [(Block ([(VarDecl ("VAR", "INT"), Pos (8, 14))], []), Pos (0, 24))],
-     Pos (0, 24));;
+       [(Block
+           ([(VarDecl ("VAR",
+                       (Number (3, 0), Pos (12, 20))),
+              Pos (8, 20))],
+            []),
+         Pos (0, 30))],
+     Pos (0, 30));;
 
 let test_parse_simple_complete_block_1 () =
   test_parse_helper
-    "DECLARE var INTEGER; BEGIN var := 0; END;"
+    "DECLARE var NUMBER(3); BEGIN var := 0; END;"
     []
-    (Program([(Block ([(VarDecl ("VAR", "INTEGER"), Pos (8, 19))],
-                      [(StmtAssignment ((Identifier "VAR", Pos(27, 29)),
-                                        (NumericLiteral "0", Pos (34, 34))),
-                        Pos (27, 35))]),
-               Pos (0, 40))]),
-     Pos (0, 40));;
+    (Program
+       [(Block
+           ([(VarDecl ("VAR", (Number (3, 0), Pos (12, 20))), Pos (8, 21))],
+            [(StmtAssignment
+                ((Identifier "VAR", Pos (29, 31)),
+                 (NumericLiteral "0", Pos (36, 36))),
+              Pos (29, 37))]),
+         Pos (0, 42))],
+     Pos (0, 42));;
 
 let test_parse_simple_complete_block_2 () =
   test_parse_helper
-    "DECLARE var INTEGER; BEGIN var := a; END;"
+    "DECLARE var NUMBER(4, 2); BEGIN var := a; END;"
     []
-    (Program([(Block ([(VarDecl ("VAR", "INTEGER"), Pos (8, 19))],
-                      [(StmtAssignment ((Identifier "VAR", Pos(27, 29)),
-                                        (Identifier "A", Pos (34, 34))),
-                        Pos (27, 35))]),
-               Pos (0, 40))]),
-     Pos(0, 40));;
+    (Program
+       [(Block
+           ([(VarDecl ("VAR",
+                       (Number (4, 2), Pos (12, 23))),
+              Pos (8, 24))],
+            [(StmtAssignment
+                ((Identifier "VAR", Pos (32, 34)),
+                 (Identifier "A", Pos (39, 39))),
+              Pos (32, 40))]),
+         Pos (0, 45))],
+     Pos (0, 45));;
 
 let test_parse_select_1 () =
   test_parse_helper
@@ -838,8 +857,12 @@ END;
     (Program
        [(StmtCreateReplaceProcedure
            ((Identifier "P", Pos (29, 29)),
-            [(ArgDecl ("N1", "NUMBER"), Pos (37, 45));
-             (ArgDecl ("N2", "NUMBER"), Pos (52, 60))],
+            [(ArgDecl ("N1",
+                       (Number (38, 127), Pos (40, 45))),
+              Pos (37, 45));
+             (ArgDecl ("N2",
+                       (Number (38, 127), Pos (55, 60))),
+              Pos (52, 60))],
             "IS",
             (Block ([],
                     [(StmtCall

@@ -133,11 +133,17 @@ struct
   and select_components = { fields : select_ast_with_pos list;
                             clauses : select_ast_with_pos list };;
 
+  type typ =
+    | Number of int * int
+    | Varchar of int
+    | Varchar2 of int
+  and typ_with_pos = typ * pos;;
+
   type plsql_ast =
     | Program of plsql_ast_with_pos list
     | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
-    | VarDecl of string * string
-    | ArgDecl of string * string
+    | VarDecl of string * typ_with_pos
+    | ArgDecl of string * typ_with_pos
     | StmtAssignment of expression_ast_with_pos * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
     | StmtIf of if_args
@@ -526,6 +532,52 @@ end;;
 
 open ExpressionAndSelect;;
 
+let parse_type =
+  let parse_number_type =
+    consume "NUMBER" <+> lookahead >>= function
+      | Some(Token("(", _)) ->
+          (consume "(" <+> string_item >>= fun precision ->
+             lookahead >>= function
+               | Some(Token(",", _)) ->
+                   (consume "," <+> string_item >>= fun scale ->
+                      consume ")"
+                      <+> (result <| Number(int_of_string(precision),
+                                            int_of_string(scale))))
+               | _ ->
+                   (consume ")" <+> (result <| Number(int_of_string(precision), 0))))
+      | _ -> result <| Number(38, 127)
+  in
+  let parse_varchar_type one_or_two =
+    (if one_or_two = 1
+     then consume "VARCHAR"
+     else consume "VARCHAR2")
+    <+> lookahead >>= function
+      | Some(Token("(", _)) ->
+          (consume "(" <+> string_item >>= fun size ->
+           let varchar_type =
+             if one_or_two = 1
+             then Varchar(int_of_string(size))
+             else  Varchar2(int_of_string(size))
+           in
+             consume ")" <+> result varchar_type)
+      | _ ->
+          let varchar_type =
+            if one_or_two = 1
+            then Varchar(4000)
+            else  Varchar2(4000)
+          in
+            result varchar_type
+  in
+    wrap_pos (lookahead >>= function
+                | Some(Token("NUMBER", _)) ->
+                    parse_number_type
+                | Some(Token("VARCHAR", _)) ->
+                    parse_varchar_type 1
+                | Some(Token("VARCHAR2", _)) ->
+                    parse_varchar_type 2
+                | _ ->
+                    error "Unknown type.")
+
 let rec parse_statement () =
   lookahead >>= function
     | Some (Token("BEGIN", _))
@@ -552,7 +604,7 @@ let rec parse_statement () =
 and parse_create () =
   let parse_arg_decl =
     wrap_pos (string_item >>= fun arg_name ->
-                string_item >>= fun arg_type ->
+                parse_type >>= fun arg_type ->
                   result <| ArgDecl(arg_name, arg_type))
   in
   let parse_is_as =
@@ -679,11 +731,10 @@ and parse_select_statement () =
 
 and parse_block () =
   let parse_vardecl =
-    wrap_pos (item >>= fun variable ->
-                item >>= fun type_name ->
+    wrap_pos (string_item >>= fun variable ->
+                parse_type >>= fun var_type ->
                   parse_semicolon <+>
-                    (result (VarDecl(token_content variable,
-                                     token_content type_name))))
+                    (result (VarDecl(variable, var_type))))
   in
   let parse_begin_end declarations =
     consume "BEGIN" >>= fun start_token2 ->

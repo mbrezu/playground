@@ -822,6 +822,70 @@ let test_parse_call_1 () =
          Pos (0, 29))],
      Pos (0, 29));;
 
+let test_parse_create_procedure_1 () =
+  test_parse_helper
+    "
+CREATE OR REPLACE PROCEDURE p (
+    n1 NUMBER,
+    n2 NUMBER
+)
+IS
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('Sum is ' || (n1 + n2));
+END;
+"
+    []
+    (Program
+       [(StmtCreateReplaceProcedure
+           ((Identifier "P", Pos (29, 29)),
+            [(ArgDecl ("N1", "NUMBER"), Pos (37, 45));
+             (ArgDecl ("N2", "NUMBER"), Pos (52, 60))],
+            "IS",
+            (Block ([],
+                    [(StmtCall
+                        ((BinaryOp (".",
+                                    (Identifier "DBMS_OUTPUT", Pos (77, 87)),
+                                    (Identifier "PUT_LINE", Pos (89, 96))),
+                          Pos (77, 96)),
+                         [(BinaryOp ("||",
+                                     (StringLiteral "'Sum is '", Pos (98, 106)),
+                                     (BinaryOp ("+",
+                                                (Identifier "N1", Pos (112, 113)),
+                                                (Identifier "N2", Pos (117, 118))),
+                                      Pos (111, 119))),
+                           Pos (98, 119))]),
+                      Pos (77, 121))]),
+             Pos (67, 126))),
+         Pos (1, 126))],
+     Pos (1, 126));;
+
+let test_parse_create_procedure_2 () =
+  test_parse_helper
+    "
+CREATE OR REPLACE PROCEDURE p 
+AS
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello, world!');
+END;
+"
+    []
+    (Program
+       [(StmtCreateReplaceProcedure
+           ((Identifier "P", Pos (29, 29)),
+            [],
+            "AS",
+            (Block ([],
+                    [(StmtCall
+                        ((BinaryOp (".",
+                                    (Identifier "DBMS_OUTPUT", Pos (45, 55)),
+                                    (Identifier "PUT_LINE", Pos (57, 64))),
+                          Pos (45, 64)),
+                         [(StringLiteral "'Hello, world!'", Pos (66, 80))]),
+                      Pos (45, 82))]),
+             Pos (35, 87))),
+         Pos (1, 87))],
+     Pos (1, 87));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -874,4 +938,9 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_null_1" >:: test_parse_null_1;
 
                                   "test_parse_call_1" >:: test_parse_call_1;
+
+                                  "test_parse_create_procedure_1" >::
+                                    test_parse_create_procedure_1;
+                                  "test_parse_create_procedure_2" >::
+                                    test_parse_create_procedure_2;
                                 ]

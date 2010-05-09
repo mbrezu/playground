@@ -137,6 +137,7 @@ struct
     | Program of plsql_ast_with_pos list
     | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
     | VarDecl of string * string
+    | ArgDecl of string * string
     | StmtAssignment of expression_ast_with_pos * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
     | StmtIf of if_args
@@ -155,6 +156,10 @@ struct
     | StmtGoto of expression_ast_with_pos
     | StmtNull
     | StmtCall of expression_ast_with_pos * expression_ast_with_pos list
+    | StmtCreateReplaceProcedure of expression_ast_with_pos *
+        plsql_ast_with_pos list *
+        string *
+        plsql_ast_with_pos
   and if_args = expression_ast_with_pos
       * plsql_ast_with_pos list
       * else_elseif
@@ -533,6 +538,7 @@ let rec parse_statement () =
     | Some (Token("GOTO", _)) -> parse_goto_statement ()
     | Some (Token("NULL", _)) -> parse_null_statement ()
     | Some (Token("<", _)) -> parse_label ()
+    | Some (Token("CREATE", _)) -> parse_create ()
     | Some (Token("EXIT", _)) ->
         let simple maybe_label = StmtExit(maybe_label) in
         let with_when cond maybe_label = StmtExitWhen(cond, maybe_label) in
@@ -542,6 +548,38 @@ let rec parse_statement () =
         let with_when cond maybe_label = StmtContinueWhen(cond, maybe_label) in
           parse_exit_or_continue "CONTINUE" simple with_when
     | _ -> parse_assignment_or_call ()
+
+and parse_create () =
+  let parse_arg_decl =
+    wrap_pos (string_item >>= fun arg_name ->
+                string_item >>= fun arg_type ->
+                  result <| ArgDecl(arg_name, arg_type))
+  in
+  let parse_is_as =
+    lookahead >>= function
+      | Some(Token("IS", _)) -> consume "IS" <+> result "IS"
+      | Some(Token("AS", _)) -> consume "AS" <+> result "AS"
+      | _ -> warning "Expected 'IS' or 'AS', inserted 'IS'." <+> result "IS"
+  in
+    wrap_pos (consume "CREATE" <+> consume "OR"
+              <+> consume "REPLACE" <+> consume "PROCEDURE"
+              <+> parse_dotted_identifier >>= fun name ->
+                lookahead >>= function
+                  | Some(Token("(", _)) ->
+                      (consume "(" <+> sep_by "," parse_arg_decl >>= fun arguments ->
+                         consume ")" <+> parse_is_as >>= fun isas ->
+                           parse_block () >>= fun body ->
+                             result <| StmtCreateReplaceProcedure(name,
+                                                                  arguments,
+                                                                  isas,
+                                                                  body))
+                  | _ ->
+                      (parse_is_as >>= fun isas ->
+                         parse_block () >>= fun body ->
+                           result <| StmtCreateReplaceProcedure(name,
+                                                                [],
+                                                                isas,
+                                                                body)))
 
 and parse_null_statement () =
   wrap_pos (consume "NULL" <+> parse_semicolon <+> (result StmtNull))
@@ -637,6 +675,7 @@ and parse_if_statement () =
 and parse_select_statement () =
   wrap_pos (parse_select >>= fun select ->
               parse_semicolon <+> (result <| StmtSelect (select)))
+
 
 and parse_block () =
   let parse_vardecl =

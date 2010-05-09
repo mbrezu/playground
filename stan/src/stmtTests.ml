@@ -909,6 +909,66 @@ END;
          Pos (1, 87))],
      Pos (1, 87));;
 
+let test_parse_typ_number_1 () =
+  test_parse_helper
+    "
+DECLARE
+  a NUMBER;
+  b NUMBER(3);
+  c NUMBER(3,4);
+BEGIN
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(VarDecl ("A",
+                       (Number (38, 127), Pos (13, 18))),
+              Pos (11, 19));
+             (VarDecl ("B",
+                       (Number (3, 0), Pos (25, 33))),
+              Pos (23, 34));
+             (VarDecl ("C",
+                       (Number (3, 4), Pos (40, 50))),
+              Pos (38, 51))],
+            []),
+         Pos (1, 62))],
+     Pos (1, 62));;
+
+let test_parse_typ_varchar_1 () =
+  test_parse_helper
+    "
+DECLARE
+  a VARCHAR(10);
+BEGIN
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(VarDecl ("A", (Varchar 10, Pos (13, 23))), Pos (11, 24))],
+            []),
+         Pos (1, 35))],
+     Pos (1, 35));;
+
+let test_parse_typ_varchar_2 () =
+  test_parse_helper
+    "
+DECLARE
+  a VARCHAR2(10);
+BEGIN
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(VarDecl ("A",
+                       (Varchar2 10, Pos (13, 24))),
+              Pos (11, 25))],
+            []),
+         Pos (1, 36))],
+     Pos (1, 36));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -966,4 +1026,11 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_create_procedure_1;
                                   "test_parse_create_procedure_2" >::
                                     test_parse_create_procedure_2;
+
+                                  "test_parse_typ_number_1" >::
+                                    test_parse_typ_number_1;
+                                  "test_parse_typ_varchar_1" >::
+                                    test_parse_typ_varchar_1;
+                                  "test_parse_typ_varchar_2" >::
+                                    test_parse_typ_varchar_2;
                                 ]

@@ -551,22 +551,13 @@ let parse_type =
     (if one_or_two = 1
      then consume "VARCHAR"
      else consume "VARCHAR2")
-    <+> lookahead >>= function
-      | Some(Token("(", _)) ->
-          (consume "(" <+> string_item >>= fun size ->
+    <+> consume "(" <+> string_item >>= fun size ->
            let varchar_type =
              if one_or_two = 1
              then Varchar(int_of_string(size))
              else  Varchar2(int_of_string(size))
            in
-             consume ")" <+> result varchar_type)
-      | _ ->
-          let varchar_type =
-            if one_or_two = 1
-            then Varchar(4000)
-            else  Varchar2(4000)
-          in
-            result varchar_type
+             consume ")" <+> result varchar_type
   in
     wrap_pos (lookahead >>= function
                 | Some(Token("NUMBER", _)) ->

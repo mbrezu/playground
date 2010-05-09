@@ -14,7 +14,8 @@
 *** DONE add the USING Clause
 ** DONE CASE in SELECT
 ** DONE IF/THEN/ELSE/ELSIF
-** TODO LOOP statement
+** DONE LOOP statement
+** TODO add tests for Varchar, Varchar2
 ** TODO statement ignore (with warning)
 ** TODO add tests for broken inputs (errors should be sane)
 

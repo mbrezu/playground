@@ -308,9 +308,9 @@ let test_parse_if_6 () =
 let test_parse_if_7 () =
   test_parse_helper
     "
-IF a > 10 THEN a := a + 1; 
-ELSIF a < 5 THEN b := a * 2; 
-ELSIF a = b THEN b := 1; 
+IF a > 10 THEN a := a + 1;
+ELSIF a < 5 THEN b := a * 2;
+ELSIF a = b THEN b := 1;
 ELSE b := 2; END IF;"
     []
     (Program
@@ -319,37 +319,41 @@ ELSE b := 2; END IF;"
                        (Identifier "A", Pos (4, 4)),
                        (NumericLiteral "10", Pos (8, 9))),
              Pos (4, 9)),
-            [(StmtAssignment ((Identifier "A", Pos(16, 16)),
-                              (BinaryOp ("+",
-                                         (Identifier "A", Pos (21, 21)),
-                                         (NumericLiteral "1", Pos (25, 25))),
-                               Pos (21, 25))),
+            [(StmtAssignment
+                ((Identifier "A", Pos (16, 16)),
+                 (BinaryOp ("+",
+                            (Identifier "A", Pos (21, 21)),
+                            (NumericLiteral "1", Pos (25, 25))),
+                  Pos (21, 25))),
               Pos (16, 26))],
             ElsIf
               ((BinaryOp ("<",
-                          (Identifier "A", Pos (35, 35)),
-                          (NumericLiteral "5", Pos (39, 39))),
-                Pos (35, 39)),
-               [(StmtAssignment ((Identifier "B", Pos(46, 46)),
-                                 (BinaryOp ("*",
-                                            (Identifier "A", Pos (51, 51)),
-                                            (NumericLiteral "2", Pos (55, 55))),
-                                  Pos (51, 55))),
-                 Pos (46, 56))],
+                          (Identifier "A", Pos (34, 34)),
+                          (NumericLiteral "5", Pos (38, 38))),
+                Pos (34, 38)),
+               [(StmtAssignment
+                   ((Identifier "B", Pos (45, 45)),
+                    (BinaryOp ("*",
+                               (Identifier "A", Pos (50, 50)),
+                               (NumericLiteral "2", Pos (54, 54))),
+                     Pos (50, 54))),
+                 Pos (45, 55))],
                ElsIf
                  ((BinaryOp ("=",
-                             (Identifier "A", Pos (65, 65)),
-                             (Identifier "B", Pos (69, 69))),
-                   Pos (65, 69)),
-                  [(StmtAssignment ((Identifier "B", Pos(76, 76)),
-                                    (NumericLiteral "1", Pos (81, 81))),
-                    Pos (76, 82))],
+                             (Identifier "A", Pos (63, 63)),
+                             (Identifier "B", Pos (67, 67))),
+                   Pos (63, 67)),
+                  [(StmtAssignment
+                      ((Identifier "B", Pos (74, 74)),
+                       (NumericLiteral "1", Pos (79, 79))),
+                    Pos (74, 80))],
                   Else
-                    [(StmtAssignment ((Identifier "B", Pos(90, 90)),
-                                      (NumericLiteral "2", Pos (95, 95))),
-                      Pos (90, 96))]))),
-         Pos (1, 104))],
-     Pos (1, 104));;
+                    [(StmtAssignment
+                        ((Identifier "B", Pos (87, 87)),
+                         (NumericLiteral "2", Pos (92, 92))),
+                      Pos (87, 93))]))),
+         Pos (1, 101))],
+     Pos (1, 101));;
 
 let test_parse_basic_loop_1 () =
   test_parse_helper
@@ -886,7 +890,7 @@ END;
 let test_parse_create_procedure_2 () =
   test_parse_helper
     "
-CREATE OR REPLACE PROCEDURE p 
+CREATE OR REPLACE PROCEDURE p
 AS
 BEGIN
     DBMS_OUTPUT.PUT_LINE('Hello, world!');
@@ -894,27 +898,24 @@ END;
 "
     []
     (Program
-       [(StmtCreateProcedure
-           (CreateOrReplace,
-            (Identifier "P", Pos (29, 29)),
-            [],
-            "AS",
-            (Block ([],
-                    [(StmtCall
-                        ((BinaryOp (".",
-                                    (Identifier "DBMS_OUTPUT", Pos (45, 55)),
-                                    (Identifier "PUT_LINE", Pos (57, 64))),
-                          Pos (45, 64)),
-                         [(StringLiteral "'Hello, world!'", Pos (66, 80))]),
-                      Pos (45, 82))]),
-             Pos (35, 87))),
-         Pos (1, 87))],
-     Pos (1, 87));;
+       [(StmtCreateProcedure (CreateOrReplace,
+                              (Identifier "P", Pos (29, 29)), [], "AS",
+                              (Block ([],
+                                      [(StmtCall
+                                          ((BinaryOp (".",
+                                                      (Identifier "DBMS_OUTPUT", Pos (44, 54)),
+                                                      (Identifier "PUT_LINE", Pos (56, 63))),
+                                            Pos (44, 63)),
+                                           [(StringLiteral "'Hello, world!'", Pos (65, 79))]),
+                                        Pos (44, 81))]),
+                               Pos (34, 86))),
+         Pos (1, 86))],
+     Pos (1, 86));;
 
 let test_parse_create_procedure_3 () =
   test_parse_helper
     "
-CREATE PROCEDURE p 
+CREATE PROCEDURE p
 AS
 BEGIN
     DBMS_OUTPUT.PUT_LINE('Hello, world!');
@@ -927,14 +928,14 @@ END;
                               (Block ([],
                                       [(StmtCall
                                           ((BinaryOp (".",
-                                                      (Identifier "DBMS_OUTPUT", Pos (34, 44)),
-                                                      (Identifier "PUT_LINE", Pos (46, 53))),
-                                            Pos (34, 53)),
-                                           [(StringLiteral "'Hello, world!'", Pos (55, 69))]),
-                                        Pos (34, 71))]),
-                               Pos (24, 76))),
-         Pos (1, 76))],
-     Pos (1, 76));;
+                                                      (Identifier "DBMS_OUTPUT", Pos (33, 43)),
+                                                      (Identifier "PUT_LINE", Pos (45, 52))),
+                                            Pos (33, 52)),
+                                           [(StringLiteral "'Hello, world!'", Pos (54, 68))]),
+                                        Pos (33, 70))]),
+                               Pos (23, 75))),
+         Pos (1, 75))],
+     Pos (1, 75));;
 
 let test_parse_typ_number_1 () =
   test_parse_helper
@@ -1096,6 +1097,38 @@ END;
          Pos (1, 57))],
      Pos (1, 57));;
 
+let test_parse_create_table_1 () =
+  test_parse_helper "
+CREATE TABLE employees (
+  employee_id NUMBER(6),
+  first_name VARCHAR2(50),
+  last_name VARCHAR2(50),
+  hire_date DATE,
+  salary NUMBER(8, 2)
+);
+"
+    []
+    (Program
+       [(StmtCreateTable
+           ((Identifier "EMPLOYEES", Pos (14, 22)),
+            [(FieldDecl ("EMPLOYEE_ID",
+                         (Number (6, 0), Pos (40, 48))),
+              Pos (28, 48));
+             (FieldDecl ("FIRST_NAME",
+                         (Varchar2 50, Pos (64, 75))),
+              Pos (53, 75));
+             (FieldDecl ("LAST_NAME",
+                         (Varchar2 50, Pos (90, 101))),
+              Pos (80, 101));
+             (FieldDecl ("HIRE_DATE",
+                         (Date, Pos (116, 119))),
+              Pos (106, 119));
+             (FieldDecl ("SALARY",
+                         (Number (8, 2), Pos (131, 142))),
+              Pos (124, 142))]),
+         Pos (1, 145))],
+     Pos (1, 145));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -1169,4 +1202,7 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_create_function_2;
                                   "test_parse_create_function_3" >::
                                     test_parse_create_function_3;
+
+                                  "test_parse_create_table_1" >::
+                                    test_parse_create_table_1;
                                 ]

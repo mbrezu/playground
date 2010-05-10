@@ -137,6 +137,7 @@ struct
     | Number of int * int
     | Varchar of int
     | Varchar2 of int
+    | Date
   and typ_with_pos = typ * pos;;
 
   type creation_type =
@@ -148,6 +149,7 @@ struct
     | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
     | VarDecl of string * typ_with_pos
     | ArgDecl of string * typ_with_pos
+    | FieldDecl of string * typ_with_pos
     | StmtAssignment of expression_ast_with_pos * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
     | StmtIf of if_args
@@ -178,6 +180,7 @@ struct
         string *
         plsql_ast_with_pos
     | StmtReturn of expression_ast_with_pos option
+    | StmtCreateTable of expression_ast_with_pos * plsql_ast_with_pos list
   and if_args = expression_ast_with_pos
       * plsql_ast_with_pos list
       * else_elseif
@@ -578,6 +581,8 @@ let parse_type =
                     parse_varchar_type 1
                 | Some(Token("VARCHAR2", _)) ->
                     parse_varchar_type 2
+                | Some(Token("DATE", _)) ->
+                    consume "DATE" <+> (result <| Date)
                 | _ ->
                     error "Unknown type.")
 
@@ -647,8 +652,22 @@ and parse_create () =
                     parse_create_procedure creation_type
                 | Some(Token("FUNCTION", _)) ->
                     parse_create_function creation_type
+                | Some(Token("TABLE", _)) ->
+                    parse_create_table ()
                 | _ ->
                     error "Cannot create object.")
+
+and parse_create_table () =
+  let parse_column =
+    wrap_pos (string_item >>= fun column_name ->
+                parse_type >>= fun column_type ->
+                  result <| FieldDecl(column_name, column_type))
+  in
+    consume "TABLE"
+    <+> parse_dotted_identifier >>= fun table_name ->
+      consume_or_fake "(" <+> sep_by "," parse_column >>= fun columns ->
+        consume_or_fake ")" <+> parse_semicolon
+        <+> (result <| StmtCreateTable(table_name, columns))
 
 and parse_create_function creation_type =
   consume "FUNCTION"

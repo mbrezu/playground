@@ -1129,6 +1129,84 @@ CREATE TABLE employees (
          Pos (1, 145))],
      Pos (1, 145));;
 
+let test_parse_rowtype_anchor_1 () =
+  test_parse_helper "
+DECLARE
+  emp employees%ROWTYPE;
+BEGIN
+  IF emp.first_name = 'JOHN' THEN
+    DBMS_OUTPUT.PUT_LINE('Hello, John!');
+  END IF;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(VarDecl ("EMP",
+                       (RowType
+                          (Identifier "EMPLOYEES", Pos (15, 23)),
+                        Pos (15, 31))),
+              Pos (11, 32))],
+            [(StmtIf
+                ((BinaryOp ("=",
+                            (BinaryOp (".",
+                                       (Identifier "EMP", Pos (45, 47)),
+                                       (Identifier "FIRST_NAME", Pos (49, 58))),
+                             Pos (45, 58)),
+                            (StringLiteral "'JOHN'", Pos (62, 67))),
+                  Pos (45, 67)),
+                 [(StmtCall
+                     ((BinaryOp (".",
+                                 (Identifier "DBMS_OUTPUT", Pos (78, 88)),
+                                 (Identifier "PUT_LINE", Pos (90, 97))),
+                       Pos (78, 97)),
+                      [(StringLiteral "'Hello, John!'",
+                        Pos (99, 112))]),
+                   Pos (78, 114))],
+                 NoElse),
+              Pos (42, 124))]),
+         Pos (1, 129))],
+     Pos (1, 129));;
+
+let test_parse_type_anchor_1 () =
+  test_parse_helper "
+DECLARE
+  emp_name employees.first_name%TYPE;
+BEGIN
+  IF emp_name = 'JOHN' THEN
+    DBMS_OUTPUT.PUT_LINE('Hello, John!');
+  END IF;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(VarDecl ("EMP_NAME",
+                       (Type
+                          (BinaryOp (".",
+                                     (Identifier "EMPLOYEES", Pos (20, 28)),
+                                     (Identifier "FIRST_NAME", Pos (30, 39))),
+                           Pos (20, 39)),
+                        Pos (20, 44))),
+              Pos (11, 45))],
+            [(StmtIf
+                ((BinaryOp ("=",
+                            (Identifier "EMP_NAME", Pos (58, 65)),
+                            (StringLiteral "'JOHN'", Pos (69, 74))),
+                  Pos (58, 74)),
+                 [(StmtCall
+                     ((BinaryOp (".",
+                                 (Identifier "DBMS_OUTPUT", Pos (85, 95)),
+                                 (Identifier "PUT_LINE", Pos (97, 104))),
+                       Pos (85, 104)),
+                      [(StringLiteral "'Hello, John!'",
+                        Pos (106, 119))]),
+                   Pos (85, 121))],
+                 NoElse),
+              Pos (55, 131))]),
+         Pos (1, 136))],
+     Pos (1, 136));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -1205,4 +1283,9 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
 
                                   "test_parse_create_table_1" >::
                                     test_parse_create_table_1;
+
+                                  "test_parse_rowtype_anchor_1" >::
+                                    test_parse_rowtype_anchor_1;
+                                  "test_parse_type_anchor_1" >::
+                                    test_parse_type_anchor_1;
                                 ]

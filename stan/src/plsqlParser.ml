@@ -36,13 +36,13 @@ let extract_limits ast_list =
       | hd :: tl -> last tl
       | [] -> failwith "Empty list."
   in
-  match ast_list with
-    | hd :: tl ->
-        let _, Pos(start_pos, _) = hd in
-        let last = last ast_list in
-        let _, Pos(_, end_pos) = last in
-          Pos(start_pos, end_pos)
-    | [] -> Pos(0, 0);;
+    match ast_list with
+      | hd :: tl ->
+          let _, Pos(start_pos, _) = hd in
+          let last = last ast_list in
+          let _, Pos(_, end_pos) = last in
+            Pos(start_pos, end_pos)
+      | [] -> Pos(0, 0);;
 
 let check_all pred str =
   let rec check_all_iter pos =
@@ -138,6 +138,8 @@ struct
     | Varchar of int
     | Varchar2 of int
     | Date
+    | RowType of expression_ast_with_pos
+    | Type of expression_ast_with_pos
   and typ_with_pos = typ * pos;;
 
   type creation_type =
@@ -420,12 +422,12 @@ struct
       p () >>= fun new_clause ->
         parse_select_clauses (new_clause :: clauses)
     in
-    lookahead_many 2 >>= function
-      | Some [Token ("HAVING", _); _] -> clause_parser parse_having_clause
-      | Some [Token ("GROUP", _); Token("BY", _)] -> clause_parser parse_group_by_clause
-      | Some [Token ("ORDER", _); Token("BY", _)] -> clause_parser parse_order_by_clause
-      | Some [Token ("WHERE", _); _] -> clause_parser parse_where_clause
-      | _ -> result <| List.rev clauses
+      lookahead_many 2 >>= function
+        | Some [Token ("HAVING", _); _] -> clause_parser parse_having_clause
+        | Some [Token ("GROUP", _); Token("BY", _)] -> clause_parser parse_group_by_clause
+        | Some [Token ("ORDER", _); Token("BY", _)] -> clause_parser parse_order_by_clause
+        | Some [Token ("WHERE", _); _] -> clause_parser parse_where_clause
+        | _ -> result <| List.rev clauses
 
   and parse_having_clause () =
     wrap_pos (consume "HAVING" <+> (parse_expression ()) >>= fun expr ->
@@ -525,8 +527,8 @@ struct
                  consume_or_fake ")"
                  <+> get_previous_pos >>= fun end_pos ->
                    let (_, Pos(start_pos, _)) = left in
-                   pte_iter (TableJoin(join_kind, left, right, None, Some columns),
-                             Pos(start_pos, end_pos)))
+                     pte_iter (TableJoin(join_kind, left, right, None, Some columns),
+                               Pos(start_pos, end_pos)))
           | _ ->
               warning "Expected 'ON' or 'USING'."
               <+> wrap_pos (result <| TableJoin(join_kind, left, right, None, None))
@@ -567,12 +569,12 @@ let parse_type =
      then consume "VARCHAR"
      else consume "VARCHAR2")
     <+> consume "(" <+> string_item >>= fun size ->
-           let varchar_type =
-             if one_or_two = 1
-             then Varchar(int_of_string(size))
-             else  Varchar2(int_of_string(size))
-           in
-             consume ")" <+> result varchar_type
+      let varchar_type =
+        if one_or_two = 1
+        then Varchar(int_of_string(size))
+        else  Varchar2(int_of_string(size))
+      in
+        consume ")" <+> result varchar_type
   in
     wrap_pos (lookahead >>= function
                 | Some(Token("NUMBER", _)) ->
@@ -584,7 +586,18 @@ let parse_type =
                 | Some(Token("DATE", _)) ->
                     consume "DATE" <+> (result <| Date)
                 | _ ->
-                    error "Unknown type.")
+                    (parse_dotted_identifier >>= fun ident ->
+                       lookahead >>= function
+                         | Some(Token("%", _)) ->
+                             consume "%" <+> (lookahead >>= function
+                                                | Some(Token("ROWTYPE", _)) ->
+                                                    consume "ROWTYPE"
+                                                    <+> (result <| RowType(ident))
+                                                | Some(Token("TYPE", _)) ->
+                                                    consume "TYPE"
+                                                    <+> (result <| Type(ident)))
+                         | _ ->
+                             error "Unknown type."))
 
 let parse_is_as =
   lookahead >>= function
@@ -825,12 +838,12 @@ and parse_assignment_or_call () =
       <+> parse_semicolon
       <+> (result <| StmtCall(subprogram_name, args))
   in
-  wrap_pos (parse_dotted_identifier >>= fun name ->
-              lookahead >>= function
-                | Some (Token(":", _)) ->
-                    parse_assignment name
-                | _ ->
-                    parse_call name)
+    wrap_pos (parse_dotted_identifier >>= fun name ->
+                lookahead >>= function
+                  | Some (Token(":", _)) ->
+                      parse_assignment name
+                  | _ ->
+                      parse_call name)
 
 let plsql_parser =
   until_eoi <| parse_statement () >>= fun statements ->

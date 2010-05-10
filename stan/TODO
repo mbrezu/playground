@@ -17,8 +17,8 @@
 ** DONE LOOP statement
 ** DONE add tests for Varchar, Varchar2
 ** DONE CREATE OR REPLACE FUNCTION
-** TODO CREATE TABLE
-** TODO %ROWTYPE, %TYPE
+** DONE CREATE TABLE
+** DONE %ROWTYPE, %TYPE
 ** TODO RECORD types
 ** TODO transaction processing
 ** TODO cursors

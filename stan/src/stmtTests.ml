@@ -855,8 +855,9 @@ END;
 "
     []
     (Program
-       [(StmtCreateReplaceProcedure
-           ((Identifier "P", Pos (29, 29)),
+       [(StmtCreateProcedure
+           (CreateOrReplace,
+            (Identifier "P", Pos (29, 29)),
             [(ArgDecl ("N1",
                        (Number (38, 127), Pos (40, 45))),
               Pos (37, 45));
@@ -893,8 +894,9 @@ END;
 "
     []
     (Program
-       [(StmtCreateReplaceProcedure
-           ((Identifier "P", Pos (29, 29)),
+       [(StmtCreateProcedure
+           (CreateOrReplace,
+            (Identifier "P", Pos (29, 29)),
             [],
             "AS",
             (Block ([],
@@ -908,6 +910,31 @@ END;
              Pos (35, 87))),
          Pos (1, 87))],
      Pos (1, 87));;
+
+let test_parse_create_procedure_3 () =
+  test_parse_helper
+    "
+CREATE PROCEDURE p 
+AS
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello, world!');
+END;
+"
+    []
+    (Program
+       [(StmtCreateProcedure (Create,
+                              (Identifier "P", Pos (18, 18)), [], "AS",
+                              (Block ([],
+                                      [(StmtCall
+                                          ((BinaryOp (".",
+                                                      (Identifier "DBMS_OUTPUT", Pos (34, 44)),
+                                                      (Identifier "PUT_LINE", Pos (46, 53))),
+                                            Pos (34, 53)),
+                                           [(StringLiteral "'Hello, world!'", Pos (55, 69))]),
+                                        Pos (34, 71))]),
+                               Pos (24, 76))),
+         Pos (1, 76))],
+     Pos (1, 76));;
 
 let test_parse_typ_number_1 () =
   test_parse_helper
@@ -969,6 +996,106 @@ END;
          Pos (1, 36))],
      Pos (1, 36));;
 
+let test_parse_create_function_1 () =
+  test_parse_helper
+    "
+CREATE OR REPLACE FUNCTION factorial (n NUMBER(2)) RETURN NUMBER(20)
+IS
+BEGIN
+  IF n = 1 OR n = 0 THEN
+    RETURN n;
+  ELSE
+    RETURN n * factorial(n - 1);
+  END IF;
+END;
+"
+    []
+    (Program
+       [(StmtCreateFunction (CreateOrReplace,
+                             (Identifier "FACTORIAL", Pos (28, 36)),
+                             [(ArgDecl ("N",
+                                        (Number (2, 0), Pos (41, 49))),
+                               Pos (39, 49))],
+                             (Number (20, 0), Pos (59, 68)), "IS",
+                             (Block ([],
+                                     [(StmtIf
+                                         ((BinaryOp ("OR",
+                                                     (BinaryOp ("=",
+                                                                (Identifier "N", Pos (84, 84)),
+                                                                (NumericLiteral "1", Pos (88, 88))),
+                                                      Pos (84, 88)),
+                                                     (BinaryOp ("=",
+                                                                (Identifier "N", Pos (93, 93)),
+                                                                (NumericLiteral "0", Pos (97, 97))),
+                                                      Pos (93, 97))),
+                                           Pos (84, 97)),
+                                          [(StmtReturn
+                                              (Some (Identifier "N", Pos (115, 115))),
+                                            Pos (108, 116))],
+                                          Else
+                                            [(StmtReturn
+                                                (Some
+                                                   (BinaryOp ("*",
+                                                              (Identifier "N", Pos (136, 136)),
+                                                              (Call
+                                                                 ((Identifier "FACTORIAL",
+                                                                   Pos (140, 148)),
+                                                                  [(BinaryOp ("-",
+                                                                              (Identifier "N",
+                                                                               Pos (150, 150)),
+                                                                              (NumericLiteral "1",
+                                                                               Pos (154, 154))),
+                                                                    Pos (150, 154))]),
+                                                               Pos (140, 155))),
+                                                    Pos (136, 155))),
+                                              Pos (129, 156))]),
+                                       Pos (81, 166))]),
+                              Pos (73, 171))),
+         Pos (1, 171))],
+     Pos (1, 171));;
+
+let test_parse_create_function_2 () =
+  test_parse_helper "
+CREATE OR REPLACE FUNCTION F RETURN NUMBER
+AS
+BEGIN
+  RETURN 3;
+END;
+"
+    []
+    (Program
+       [(StmtCreateFunction (CreateOrReplace,
+                             (Identifier "F", Pos (28, 28)), [],
+                             (Number (38, 127), Pos (37, 42)), "AS",
+                             (Block ([],
+                                     [(StmtReturn
+                                         (Some (NumericLiteral "3", Pos (62, 62))),
+                                       Pos (55, 63))]),
+                              Pos (47, 68))),
+         Pos (1, 68))],
+     Pos (1, 68));;
+
+let test_parse_create_function_3 () =
+  test_parse_helper "
+CREATE FUNCTION F RETURN NUMBER
+IS
+BEGIN
+  RETURN 3;
+END;
+"
+    []
+    (Program
+       [(StmtCreateFunction (Create,
+                             (Identifier "F", Pos (17, 17)), [],
+                             (Number (38, 127), Pos (26, 31)), "IS",
+                             (Block ([],
+                                     [(StmtReturn
+                                         (Some (NumericLiteral "3", Pos (51, 51))),
+                                       Pos (44, 52))]),
+                              Pos (36, 57))),
+         Pos (1, 57))],
+     Pos (1, 57));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -1026,6 +1153,8 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_create_procedure_1;
                                   "test_parse_create_procedure_2" >::
                                     test_parse_create_procedure_2;
+                                  "test_parse_create_procedure_3" >::
+                                    test_parse_create_procedure_3;
 
                                   "test_parse_typ_number_1" >::
                                     test_parse_typ_number_1;
@@ -1033,4 +1162,11 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_typ_varchar_1;
                                   "test_parse_typ_varchar_2" >::
                                     test_parse_typ_varchar_2;
+
+                                  "test_parse_create_function_1" >::
+                                    test_parse_create_function_1;
+                                  "test_parse_create_function_2" >::
+                                    test_parse_create_function_2;
+                                  "test_parse_create_function_3" >::
+                                    test_parse_create_function_3;
                                 ]

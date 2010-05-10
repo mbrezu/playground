@@ -16,6 +16,19 @@
 ** DONE IF/THEN/ELSE/ELSIF
 ** DONE LOOP statement
 ** DONE add tests for Varchar, Varchar2
+** DONE CREATE OR REPLACE FUNCTION
+** TODO CREATE TABLE
+** TODO %ROWTYPE, %TYPE
+** TODO RECORD types
+** TODO transaction processing
+** TODO cursors
+** TODO dynamic pl/sql
+** TODO collections and records
+** TODO triggers
+** TODO indexes
+** TODO packages
+** TODO error handling
+** TODO CREATE TYPE, objects
 ** TODO statement ignore (with warning)
 ** TODO add tests for broken inputs (errors should be sane)
 

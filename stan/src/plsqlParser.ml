@@ -139,6 +139,10 @@ struct
     | Varchar2 of int
   and typ_with_pos = typ * pos;;
 
+  type creation_type =
+    | Create
+    | CreateOrReplace;;
+
   type plsql_ast =
     | Program of plsql_ast_with_pos list
     | Block of plsql_ast_with_pos list * plsql_ast_with_pos list
@@ -162,10 +166,18 @@ struct
     | StmtGoto of expression_ast_with_pos
     | StmtNull
     | StmtCall of expression_ast_with_pos * expression_ast_with_pos list
-    | StmtCreateReplaceProcedure of expression_ast_with_pos *
+    | StmtCreateProcedure of creation_type *
+        expression_ast_with_pos *
         plsql_ast_with_pos list *
         string *
         plsql_ast_with_pos
+    | StmtCreateFunction of creation_type *
+        expression_ast_with_pos *
+        plsql_ast_with_pos list *
+        typ_with_pos *
+        string *
+        plsql_ast_with_pos
+    | StmtReturn of expression_ast_with_pos option
   and if_args = expression_ast_with_pos
       * plsql_ast_with_pos list
       * else_elseif
@@ -569,6 +581,32 @@ let parse_type =
                 | _ ->
                     error "Unknown type.")
 
+let parse_is_as =
+  lookahead >>= function
+    | Some(Token("IS", _)) -> consume "IS" <+> result "IS"
+    | Some(Token("AS", _)) -> consume "AS" <+> result "AS"
+    | _ -> warning "Expected 'IS' or 'AS', inserted 'IS'." <+> result "IS";;
+
+let parse_creation_type =
+  lookahead_many 2 >>= function
+    | Some([Token("OR", _); Token("REPLACE", _)]) ->
+        (consume_many 2 <+> result CreateOrReplace)
+    | _ ->
+        result Create;;
+
+let parse_arg_decl =
+  wrap_pos (string_item >>= fun arg_name ->
+              parse_type >>= fun arg_type ->
+                result <| ArgDecl(arg_name, arg_type));;
+
+let parse_subprogram_arguments =
+  lookahead >>= function
+    | Some(Token("(", _)) ->
+        (consume "(" <+> sep_by "," parse_arg_decl >>= fun arguments ->
+           consume ")" <+> (result arguments))
+    | _ ->
+        result [];;
+
 let rec parse_statement () =
   lookahead >>= function
     | Some (Token("BEGIN", _))
@@ -581,7 +619,6 @@ let rec parse_statement () =
     | Some (Token("GOTO", _)) -> parse_goto_statement ()
     | Some (Token("NULL", _)) -> parse_null_statement ()
     | Some (Token("<", _)) -> parse_label ()
-    | Some (Token("CREATE", _)) -> parse_create ()
     | Some (Token("EXIT", _)) ->
         let simple maybe_label = StmtExit(maybe_label) in
         let with_when cond maybe_label = StmtExitWhen(cond, maybe_label) in
@@ -590,39 +627,54 @@ let rec parse_statement () =
         let simple maybe_label = StmtContinue(maybe_label) in
         let with_when cond maybe_label = StmtContinueWhen(cond, maybe_label) in
           parse_exit_or_continue "CONTINUE" simple with_when
+    | Some (Token("CREATE", _)) -> parse_create ()
+    | Some (Token("RETURN", _)) -> parse_return ()
     | _ -> parse_assignment_or_call ()
 
+and parse_return () =
+  wrap_pos (consume "RETURN" <+> lookahead >>= function
+              | Some(Token(";", _)) ->
+                  parse_semicolon <+> (result <| StmtReturn(None))
+              | _ ->
+                  parse_expression >>= function return_value ->
+                    parse_semicolon <+> (result <| StmtReturn(Some return_value)))
+
 and parse_create () =
-  let parse_arg_decl =
-    wrap_pos (string_item >>= fun arg_name ->
-                parse_type >>= fun arg_type ->
-                  result <| ArgDecl(arg_name, arg_type))
-  in
-  let parse_is_as =
-    lookahead >>= function
-      | Some(Token("IS", _)) -> consume "IS" <+> result "IS"
-      | Some(Token("AS", _)) -> consume "AS" <+> result "AS"
-      | _ -> warning "Expected 'IS' or 'AS', inserted 'IS'." <+> result "IS"
-  in
-    wrap_pos (consume "CREATE" <+> consume "OR"
-              <+> consume "REPLACE" <+> consume "PROCEDURE"
-              <+> parse_dotted_identifier >>= fun name ->
-                lookahead >>= function
-                  | Some(Token("(", _)) ->
-                      (consume "(" <+> sep_by "," parse_arg_decl >>= fun arguments ->
-                         consume ")" <+> parse_is_as >>= fun isas ->
-                           parse_block () >>= fun body ->
-                             result <| StmtCreateReplaceProcedure(name,
-                                                                  arguments,
-                                                                  isas,
-                                                                  body))
-                  | _ ->
-                      (parse_is_as >>= fun isas ->
-                         parse_block () >>= fun body ->
-                           result <| StmtCreateReplaceProcedure(name,
-                                                                [],
-                                                                isas,
-                                                                body)))
+  wrap_pos (consume "CREATE"
+            <+> parse_creation_type >>= fun creation_type ->
+              lookahead >>= function
+                | Some(Token("PROCEDURE", _)) ->
+                    parse_create_procedure creation_type
+                | Some(Token("FUNCTION", _)) ->
+                    parse_create_function creation_type
+                | _ ->
+                    error "Cannot create object.")
+
+and parse_create_function creation_type =
+  consume "FUNCTION"
+  <+> parse_dotted_identifier >>= fun name ->
+    parse_subprogram_arguments >>= fun arguments ->
+      consume_or_fake "RETURN" <+> parse_type >>= fun return_type ->
+        parse_is_as >>= fun isas ->
+          parse_block () >>= fun body ->
+            result <| StmtCreateFunction(creation_type,
+                                         name,
+                                         arguments,
+                                         return_type,
+                                         isas,
+                                         body)
+
+and parse_create_procedure creation_type =
+  consume "PROCEDURE"
+  <+> parse_dotted_identifier >>= fun name ->
+    parse_subprogram_arguments >>= fun arguments ->
+      parse_is_as >>= fun isas ->
+        parse_block () >>= fun body ->
+          result <| StmtCreateProcedure(creation_type,
+                                        name,
+                                        arguments,
+                                        isas,
+                                        body)
 
 and parse_null_statement () =
   wrap_pos (consume "NULL" <+> parse_semicolon <+> (result StmtNull))

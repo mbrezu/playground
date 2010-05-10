@@ -19,7 +19,7 @@
 ** DONE CREATE OR REPLACE FUNCTION
 ** DONE CREATE TABLE
 ** DONE %ROWTYPE, %TYPE
-** TODO RECORD types
+** DONE RECORD types
 ** TODO transaction processing
 ** TODO cursors
 ** TODO dynamic pl/sql

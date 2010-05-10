@@ -140,6 +140,7 @@ struct
     | Date
     | RowType of expression_ast_with_pos
     | Type of expression_ast_with_pos
+    | Record of expression_ast_with_pos
   and typ_with_pos = typ * pos;;
 
   type creation_type =
@@ -152,6 +153,7 @@ struct
     | VarDecl of string * typ_with_pos
     | ArgDecl of string * typ_with_pos
     | FieldDecl of string * typ_with_pos
+    | RecordDecl of expression_ast_with_pos * plsql_ast_with_pos list
     | StmtAssignment of expression_ast_with_pos * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
     | StmtIf of if_args
@@ -595,9 +597,11 @@ let parse_type =
                                                     <+> (result <| RowType(ident))
                                                 | Some(Token("TYPE", _)) ->
                                                     consume "TYPE"
-                                                    <+> (result <| Type(ident)))
+                                                    <+> (result <| Type(ident))
+                                                | _ ->
+                                                    error "Expected 'TYPE' or 'ROWTYPE'.")
                          | _ ->
-                             error "Unknown type."))
+                             result <| Record(ident)))
 
 let parse_is_as =
   lookahead >>= function
@@ -670,17 +674,18 @@ and parse_create () =
                 | _ ->
                     error "Cannot create object.")
 
+and parse_field () =
+  wrap_pos (string_item >>= fun column_name ->
+              parse_type >>= fun column_type ->
+                result <| FieldDecl(column_name, column_type))
+
 and parse_create_table () =
-  let parse_column =
-    wrap_pos (string_item >>= fun column_name ->
-                parse_type >>= fun column_type ->
-                  result <| FieldDecl(column_name, column_type))
-  in
-    consume "TABLE"
-    <+> parse_dotted_identifier >>= fun table_name ->
-      consume_or_fake "(" <+> sep_by "," parse_column >>= fun columns ->
-        consume_or_fake ")" <+> parse_semicolon
-        <+> (result <| StmtCreateTable(table_name, columns))
+
+  consume "TABLE"
+  <+> parse_dotted_identifier >>= fun table_name ->
+    consume_or_fake "(" <+> sep_by "," (parse_field ()) >>= fun columns ->
+      consume_or_fake ")" <+> parse_semicolon
+      <+> (result <| StmtCreateTable(table_name, columns))
 
 and parse_create_function creation_type =
   consume "FUNCTION"
@@ -804,12 +809,28 @@ and parse_select_statement () =
               parse_semicolon <+> (result <| StmtSelect (select)))
 
 
+
 and parse_block () =
+  let parse_record_decl () =
+    let parse_record_field =
+      parse_field () >>= fun field ->
+        parse_semicolon <+> (result field)
+    in
+      consume "TYPE" <+> parse_dotted_identifier >>= fun type_name ->
+        consume "IS" <+> consume "RECORD" <+> consume_or_fake "("
+        <+> until [")"] parse_record_field >>= fun members ->
+          consume_or_fake ")" <+> parse_semicolon
+          <+> (result <| RecordDecl(type_name, members))
+  in
   let parse_vardecl =
-    wrap_pos (string_item >>= fun variable ->
-                parse_type >>= fun var_type ->
-                  parse_semicolon <+>
-                    (result (VarDecl(variable, var_type))))
+    wrap_pos (lookahead >>= function
+                | Some(Token("TYPE", _)) ->
+                    parse_record_decl ()
+                | _ ->
+                    string_item >>= fun variable ->
+                      parse_type >>= fun var_type ->
+                        parse_semicolon <+>
+                          (result (VarDecl(variable, var_type))))
   in
   let parse_begin_end declarations =
     consume "BEGIN" >>= fun start_token2 ->

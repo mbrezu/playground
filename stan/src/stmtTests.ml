@@ -1207,6 +1207,59 @@ END;
          Pos (1, 136))],
      Pos (1, 136));;
 
+let test_parse_record_1 () =
+  test_parse_helper "
+DECLARE
+  TYPE point IS RECORD (
+    x NUMBER;
+    y NUMBER;
+  );
+  pt point;
+BEGIN
+  pt.x := 10;
+  pt.y := pt.x * 2;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(RecordDecl
+                ((Identifier "POINT", Pos (16, 20)),
+                 [(FieldDecl ("X",
+                              (Number (38, 127), Pos (40, 45))),
+                   Pos (38, 45));
+                  (FieldDecl ("Y",
+                              (Number (38, 127), Pos (54, 59))),
+                   Pos (52, 59))]),
+              Pos (11, 65));
+             (VarDecl ("PT",
+                       (Record
+                          (Identifier "POINT", Pos (72, 76)),
+                        Pos (72, 76))),
+              Pos (69, 77))],
+            [(StmtAssignment
+                ((BinaryOp (".",
+                            (Identifier "PT", Pos (87, 88)),
+                            (Identifier "X", Pos (90, 90))),
+                  Pos (87, 90)),
+                 (NumericLiteral "10", Pos (95, 96))),
+              Pos (87, 97));
+             (StmtAssignment
+                ((BinaryOp (".",
+                            (Identifier "PT", Pos (101, 102)),
+                            (Identifier "Y", Pos (104, 104))),
+                  Pos (101, 104)),
+                 (BinaryOp ("*",
+                            (BinaryOp (".",
+                                       (Identifier "PT", Pos (109, 110)),
+                                       (Identifier "X", Pos (112, 112))),
+                             Pos (109, 112)),
+                            (NumericLiteral "2", Pos (116, 116))),
+                  Pos (109, 116))),
+              Pos (101, 117))]),
+         Pos (1, 122))],
+     Pos (1, 122));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -1288,4 +1341,7 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_rowtype_anchor_1;
                                   "test_parse_type_anchor_1" >::
                                     test_parse_type_anchor_1;
+
+                                  "test_parse_record_1" >::
+                                    test_parse_record_1;
                                 ]

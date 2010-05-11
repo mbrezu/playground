@@ -1269,6 +1269,24 @@ COMMIT WORK NOWAIT IMMEDIATE;
     (Program [(StmtNull, Pos (1, 29))],
      Pos (1, 29));;
 
+let test_parse_ignore_create_1 () =
+  test_parse_helper "
+CREATE CLUSTER;
+"
+    [Warning (SkippedNotImplemented, "Start of statement ignored by STAN.", 1);
+     Warning (SkippedNotImplemented, "End of statement ignored by STAN.", 16)]
+    (Program [(StmtNull, Pos (1, 15))],
+     Pos (1, 15));;
+
+let test_parse_ignore_create_2 () =
+  test_parse_helper "
+CREATE CONTEXT
+"
+    [Warning (SkippedNotImplemented, "Start of statement ignored by STAN.", 1);
+     Warning (SkippedNotImplemented, "End of statement ignored by STAN.", 15)]
+    (Program [(StmtNull, Pos (1, 14))],
+     Pos (1, 14));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -1355,4 +1373,8 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_record_1;
 
                                   "test_parse_commit_1" >:: test_parse_commit_1;
+                                  "test_parse_ignore_create_1" >::
+                                    test_parse_ignore_create_1;
+                                  "test_parse_ignore_create_2" >::
+                                    test_parse_ignore_create_2;
                                 ]

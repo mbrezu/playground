@@ -651,7 +651,34 @@ let rec parse_statement () =
           parse_exit_or_continue "CONTINUE" simple with_when
     | Some (Token("CREATE", _)) -> parse_create ()
     | Some (Token("RETURN", _)) -> parse_return ()
-    | Some (Token("COMMIT", _)) -> ignore_statement ()
+        (* Ignored statements (from SQL specification). *)
+    | Some (Token("ALTER", _))
+    | Some (Token("ANALYZE", _))
+    | Some (Token("ASSOCIATE", _))
+    | Some (Token("AUDIT", _))
+    | Some (Token("CALL", _))
+    | Some (Token("COMMENT", _))
+    | Some (Token("COMMIT", _))
+    | Some (Token("DELETE", _))
+    | Some (Token("DISASSOCIATE", _))
+    | Some (Token("DROP", _))
+    | Some (Token("EXPLAIN", _))
+    | Some (Token("FLASHBACK", _))
+    | Some (Token("GRANT", _))
+    | Some (Token("INSERT", _))
+    | Some (Token("LOCK", _))
+    | Some (Token("MERGE", _))
+    | Some (Token("NOAUDIT", _))
+    | Some (Token("PURGE", _))
+    | Some (Token("RENAME", _))
+    | Some (Token("REVOKE", _))
+    | Some (Token("ROLLBACK", _))
+    | Some (Token("SET", _))
+    | Some (Token("SAVEPOINT", _))
+    | Some (Token("SET", _))
+    | Some (Token("TRUNCATE", _))
+    | Some (Token("UPDATE", _)) ->
+        ignore_statement ()
     | _ -> parse_assignment_or_call ()
 
 and ignore_statement () =
@@ -659,6 +686,8 @@ and ignore_statement () =
     item <+> lookahead >>= function
       | Some (Token(";", _)) when nesting_level = 0 ->
           item <+> (result ())
+      | None ->
+          result ()
       | Some (Token("BEGIN", _))
       | Some (Token("DECLARE", _))
       | Some (Token("SELECT", _))
@@ -704,7 +733,9 @@ and parse_create () =
                 | Some(Token("TABLE", _)) ->
                     parse_create_table ()
                 | _ ->
-                    error "Cannot create object.")
+                    fail)
+  <|>
+      ignore_statement ()
 
 and parse_field () =
   wrap_pos (string_item >>= fun column_name ->
@@ -712,7 +743,6 @@ and parse_field () =
                 result <| FieldDecl(column_name, column_type))
 
 and parse_create_table () =
-
   consume "TABLE"
   <+> parse_dotted_identifier >>= fun table_name ->
     consume_or_fake "(" <+> sep_by "," (parse_field ()) >>= fun columns ->

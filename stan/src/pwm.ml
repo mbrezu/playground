@@ -56,16 +56,24 @@ let get_previous_pos = ParserM (fun (stream, warnings) ->
                                       | None ->
                                           warnings, Some (stream, 0));;
 
-(* Add a warning, but don't terminate the parser. *)
-let warning warning_message =
+(* Common code to add warnings. *)
+let add_warning warning_type warning_message =
   let warning_impl pos =
     ParserM (fun (stream, warnings) ->
-               let warning = Warning(Error, warning_message, pos) in
+               let warning = Warning(warning_type, warning_message, pos) in
                let new_warnings = warning :: warnings in
                  new_warnings, Some (stream, ()))
   in
     get_next_pos >>= fun pos ->
       warning_impl pos;;
+
+(* Add a warning, but don't terminate the parser. *)
+let warning warning_message =
+  add_warning Error warning_message;;
+
+(* Add a 'not implemented' warning. *)
+let warning_not_implemented warning_message =
+  add_warning SkippedNotImplemented warning_message;;
 
 (* Terminate this parser. *)
 let fail =

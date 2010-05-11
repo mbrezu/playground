@@ -1260,6 +1260,15 @@ END;
          Pos (1, 122))],
      Pos (1, 122));;
 
+let test_parse_commit_1 () =
+  test_parse_helper "
+COMMIT WORK NOWAIT IMMEDIATE;
+"
+    [Warning (SkippedNotImplemented, "Start of statement ignored by STAN.", 1);
+     Warning (SkippedNotImplemented, "End of statement ignored by STAN.", 30)]
+    (Program [(StmtNull, Pos (1, 29))],
+     Pos (1, 29));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -1344,4 +1353,6 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
 
                                   "test_parse_record_1" >::
                                     test_parse_record_1;
+
+                                  "test_parse_commit_1" >:: test_parse_commit_1;
                                 ]

@@ -651,7 +651,39 @@ let rec parse_statement () =
           parse_exit_or_continue "CONTINUE" simple with_when
     | Some (Token("CREATE", _)) -> parse_create ()
     | Some (Token("RETURN", _)) -> parse_return ()
+    | Some (Token("COMMIT", _)) -> ignore_statement ()
     | _ -> parse_assignment_or_call ()
+
+and ignore_statement () =
+  let rec ignore_statement_iter nesting_level =
+    item <+> lookahead >>= function
+      | Some (Token(";", _)) when nesting_level = 0 ->
+          item <+> (result ())
+      | Some (Token("BEGIN", _))
+      | Some (Token("DECLARE", _))
+      | Some (Token("SELECT", _))
+      | Some (Token("IF", _))
+      | Some (Token("LOOP", _)) ->
+          if nesting_level = 0
+          then result ()
+          else ignore_statement_iter (nesting_level + 1)
+      | Some (Token("FOR", _))
+      | Some (Token("WHILE", _))
+      | Some (Token("GOTO", _))
+      | Some (Token("NULL", _))
+      | Some (Token("<", _)) ->
+          if nesting_level = 0
+          then result ()
+          else ignore_statement_iter nesting_level
+      | Some (Token("END", _)) ->
+          item <+> ignore_statement_iter (nesting_level - 1)
+      | _ ->
+          ignore_statement_iter nesting_level
+  in
+    wrap_pos (warning_not_implemented "Start of statement ignored by STAN."
+              <+> (ignore_statement_iter 0)
+              <+> warning_not_implemented "End of statement ignored by STAN."
+              <+> (result StmtNull))
 
 and parse_return () =
   wrap_pos (consume "RETURN" <+> lookahead >>= function

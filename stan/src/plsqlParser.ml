@@ -1021,10 +1021,22 @@ let run_parser_helper parser tokens =
 let parse tokens =
   run_parser_helper plsql_parser tokens;;
 
+(* Convertor of positions reported in errors. Error list must be
+   sorted in ascending order by position. *)
+let convert_error_positions text errors =
+  let positions = List.map (fun (Warning(_, _, pos)) -> pos) errors in
+  let line_cols = convert_pos_to_line_col text positions in
+    List.map2
+      (fun (Warning(kind, msg, _)) pos -> (kind, msg, pos))
+      errors
+      line_cols;;
+
 (* Helper functions for testing/debugging. *)
 let parse2 str =
   let tokens, _ = tokenize str 0 in
-    parse tokens;;
+  let rev_errors, ast = parse tokens in
+  let proper_errors = convert_error_positions str (List.rev rev_errors) in
+    proper_errors, ast;;
 
 let parse_expr tokens =
   run_parser_helper parse_expression tokens;;

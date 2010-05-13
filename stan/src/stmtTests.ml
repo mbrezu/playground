@@ -37,16 +37,16 @@ let test_parse_empty_block_with_decl () =
 let test_parse_begin_end_no_semicolon () =
   test_parse_helper
     "BEGIN END"
-    [Warning(Error, "Expected ';'.", 8)]
+    [(Error, "Expected ';'.", LineColumn(0, 8))]
     (Program([Block([], []), Pos(0, 8)]), Pos(0, 8));
   test_parse_helper
     "DECLARE BEGIN END"
-    [Warning(Error, "Expected ';'.", 16)]
+    [(Error, "Expected ';'.", LineColumn(0, 16))]
     (Program([Block([], []), Pos(0, 16)]), Pos(0, 16));
   test_parse_helper
     "DECLARE var NUMBER(3) BEGIN END"
-    [Warning(Error, "Expected ';'.", 20);
-     Warning(Error, "Expected ';'.", 30)]
+    [(Error, "Expected ';'.", LineColumn(0, 20));
+     (Error, "Expected ';'.", LineColumn(0, 30))]
     (Program
        [(Block
            ([(VarDecl ("VAR",
@@ -1298,8 +1298,8 @@ let test_parse_commit_1 () =
   test_parse_helper "
 COMMIT WORK NOWAIT IMMEDIATE;
 "
-    [Warning (SkippedNotImplemented, "Start of statement ignored by STAN.", 1);
-     Warning (SkippedNotImplemented, "End of statement ignored by STAN.", 30)]
+    [(SkippedNotImplemented, "Start of statement ignored by STAN.", LineColumn(1, 0));
+     (SkippedNotImplemented, "End of statement ignored by STAN.", LineColumn(1, 29))]
     (Program [(StmtNull, Pos (1, 29))],
      Pos (1, 29));;
 
@@ -1307,8 +1307,8 @@ let test_parse_ignore_create_1 () =
   test_parse_helper "
 CREATE CLUSTER;
 "
-    [Warning (SkippedNotImplemented, "Start of statement ignored by STAN.", 1);
-     Warning (SkippedNotImplemented, "End of statement ignored by STAN.", 16)]
+    [(SkippedNotImplemented, "Start of statement ignored by STAN.", LineColumn(1, 0));
+     (SkippedNotImplemented, "End of statement ignored by STAN.", LineColumn(1, 15))]
     (Program [(StmtNull, Pos (1, 15))],
      Pos (1, 15));;
 
@@ -1316,8 +1316,8 @@ let test_parse_ignore_create_2 () =
   test_parse_helper "
 CREATE CONTEXT
 "
-    [Warning (SkippedNotImplemented, "Start of statement ignored by STAN.", 1);
-     Warning (SkippedNotImplemented, "End of statement ignored by STAN.", 15)]
+    [(SkippedNotImplemented, "Start of statement ignored by STAN.", LineColumn(1, 0));
+     (SkippedNotImplemented, "End of statement ignored by STAN.", LineColumn(1, 14))]
     (Program [(StmtNull, Pos (1, 14))],
      Pos (1, 14));;
 

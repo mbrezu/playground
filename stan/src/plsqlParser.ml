@@ -75,9 +75,9 @@ let matching_sequence seqs =
           fail
   in
   let parsers = List.map (fun seq -> parse_seq seq) seqs in
-    (List.fold_left (<|>) (List.hd parsers) (List.tl parsers) >>= fun str ->
+    (List.fold_left (</>) (List.hd parsers) (List.tl parsers) >>= fun str ->
        result <| Some str)
-    <|> result None;;
+    </> result None;;
 
 module Ast =
 struct
@@ -146,9 +146,9 @@ struct
     | Varchar of int
     | Varchar2 of int
     | Date
-    | RowType of expression_ast_with_pos
-    | Type of expression_ast_with_pos
-    | Record of expression_ast_with_pos
+    | RowTypeAnchor of expression_ast_with_pos
+    | TypeAnchor of expression_ast_with_pos
+    | TypeName of expression_ast_with_pos
   and typ_with_pos = typ * pos;;
 
   type creation_type =
@@ -163,6 +163,7 @@ struct
     | FieldDecl of string * typ_with_pos
     | RecordDecl of expression_ast_with_pos * plsql_ast_with_pos list
     | CursorDecl of expression_ast_with_pos * select_ast_with_pos
+    | TableDecl of expression_ast_with_pos * typ_with_pos
     | StmtAssignment of expression_ast_with_pos * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
     | StmtIf of if_args
@@ -197,6 +198,7 @@ struct
     | StmtOpen of expression_ast_with_pos
     | StmtClose of expression_ast_with_pos
     | StmtFetch of expression_ast_with_pos * expression_ast_with_pos list
+    | StmtFetchBulkCollect of expression_ast_with_pos * expression_ast_with_pos list
   and if_args = expression_ast_with_pos
       * plsql_ast_with_pos list
       * else_elseif
@@ -279,7 +281,7 @@ struct
                                                                        CursorBulkExceptions)
                            | _ ->
                                warning "Unknown cursor expression. Assumed '%ISOPEN'."
-                                 <+> (result <| CursorExpr(ident_with_pos, CursorIsOpen)))
+                               <+> (result <| CursorExpr(ident_with_pos, CursorIsOpen)))
                   | _ ->
                       result ident)
 
@@ -622,14 +624,14 @@ let parse_type =
                              consume "%" <+> (lookahead >>= function
                                                 | Some(Token("ROWTYPE", _)) ->
                                                     consume "ROWTYPE"
-                                                    <+> (result <| RowType(ident))
+                                                    <+> (result <| RowTypeAnchor(ident))
                                                 | Some(Token("TYPE", _)) ->
                                                     consume "TYPE"
-                                                    <+> (result <| Type(ident))
+                                                    <+> (result <| TypeAnchor(ident))
                                                 | _ ->
                                                     error "Expected 'TYPE' or 'ROWTYPE'.")
                          | _ ->
-                             result <| Record(ident)))
+                             result <| TypeName(ident)))
 
 let parse_is_as =
   lookahead >>= function
@@ -712,9 +714,23 @@ let rec parse_statement () =
     | _ -> parse_assignment_or_call ()
 
 and parse_fetch () =
-  wrap_pos (consume "FETCH" <+> parse_dotted_identifier >>= fun cursor_name ->
-              consume_or_fake "INTO" <+> sep_by "," parse_dotted_identifier >>= fun vars ->
-                parse_semicolon <+> (result <| StmtFetch(cursor_name, vars)))
+  let parse_fetch_inner cursor_name bulk_collect =
+    consume_or_fake "INTO"
+    <+> sep_by "," parse_dotted_identifier >>= fun vars ->
+      let fetch_statement =
+        if bulk_collect
+        then StmtFetchBulkCollect(cursor_name, vars)
+        else StmtFetch(cursor_name, vars)
+      in
+        parse_semicolon
+        <+> (result fetch_statement)
+  in
+    wrap_pos (consume "FETCH" <+> parse_dotted_identifier >>= fun cursor_name ->
+                lookahead_many 2 >>= function
+                  | Some [Token("BULK", _); Token("COLLECT", _)] ->
+                      consume_many 2 <+> parse_fetch_inner cursor_name true
+                  | _ ->
+                      parse_fetch_inner cursor_name false)
 
 and parse_open () =
   wrap_pos (consume "OPEN" <+> parse_dotted_identifier >>= fun cursor_name ->
@@ -777,8 +793,8 @@ and parse_create () =
                     parse_create_table ()
                 | _ ->
                     fail)
-  <|>
-      ignore_statement ()
+  </>
+    ignore_statement ()
 
 and parse_field () =
   wrap_pos (string_item >>= fun column_name ->
@@ -913,29 +929,44 @@ and parse_select_statement () =
   wrap_pos (parse_select >>= fun select ->
               parse_semicolon <+> (result <| StmtSelect (select)))
 
-
-
 and parse_block () =
-  let parse_record_decl =
-    let parse_record_field =
-      parse_field () >>= fun field ->
-        parse_semicolon <+> (result field)
-    in
-      consume "TYPE" <+> parse_dotted_identifier >>= fun type_name ->
-        consume "IS" <+> consume "RECORD" <+> consume_or_fake "("
-        <+> until [")"] parse_record_field >>= fun members ->
-          consume_or_fake ")" <+> parse_semicolon
-          <+> (result <| RecordDecl(type_name, members))
-  in
   let parse_cursor_decl =
     consume "CURSOR" <+> parse_dotted_identifier >>= fun cursor_name ->
       consume_or_fake "IS" <+> parse_select >>= fun select_expression ->
         parse_semicolon <+> (result <| CursorDecl(cursor_name, select_expression))
   in
+  let parse_type_decl =
+    let parse_record_decl type_name =
+      let parse_record_field =
+        parse_field () >>= fun field ->
+          parse_semicolon <+> (result field)
+      in
+        consume "RECORD"
+        <+> consume_or_fake "("
+        <+> until [")"] parse_record_field >>= fun members ->
+          consume_or_fake ")"
+          <+> parse_semicolon
+          <+> (result <| RecordDecl(type_name, members))
+    in
+    let parse_table_decl type_name =
+      consume "TABLE"
+      <+> consume_or_fake "OF"
+      <+> parse_type >>= fun table_type ->
+        parse_semicolon
+        <+> (result <| TableDecl(type_name, table_type))
+    in
+      consume "TYPE" <+> parse_dotted_identifier >>= fun type_name ->
+        consume "IS" <+> lookahead >>= function
+          | Some(Token("RECORD", _)) ->
+              parse_record_decl type_name
+          | Some(Token("TABLE", _)) ->
+              parse_table_decl type_name
+          | _ -> error "Unknown kind of type."
+  in
   let parse_vardecl =
     wrap_pos (lookahead >>= function
                 | Some(Token("TYPE", _)) ->
-                    parse_record_decl
+                    parse_type_decl
                 | Some(Token("CURSOR", _)) ->
                     parse_cursor_decl
                 | _ ->

@@ -22,8 +22,10 @@ let (>>=) = bind;;
 let (<+>) p q =
   p >>= fun _ -> q;;
 
-(* Parse with either p and q. Only the first valid alternative is kept. *)
-let (<|>) p q = ParserM (fun inp ->
+(* Parse with either p and q. Only the first valid alternative is
+   kept. We use </> instead of <|> to help the emacs mode
+   formatter. *)
+let (</>) p q = ParserM (fun inp ->
                            match run_parser p inp with
                              | (_, Some _) as p_results ->
                                  p_results

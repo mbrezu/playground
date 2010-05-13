@@ -22,6 +22,16 @@
 ** DONE RECORD types
 ** DONE transaction processing
 ** TODO cursors
+*** DONE bulk collect
+**** DONE table types
+*** TODO cursor parameters
+**** TODO with for
+**** TODO with open
+*** TODO for with cursors
+**** TODO implicit
+**** TODO explicit
+** TODO convert positions-in-stream to line/col pairs
+** TODO SELECT INTO
 ** TODO dynamic pl/sql
 ** TODO collections and records
 ** TODO triggers

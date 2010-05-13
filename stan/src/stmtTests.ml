@@ -1143,7 +1143,7 @@ END;
     (Program
        [(Block
            ([(VarDecl ("EMP",
-                       (RowType
+                       (RowTypeAnchor
                           (Identifier "EMPLOYEES", Pos (15, 23)),
                         Pos (15, 31))),
               Pos (11, 32))],
@@ -1182,7 +1182,7 @@ END;
     (Program
        [(Block
            ([(VarDecl ("EMP_NAME",
-                       (Type
+                       (TypeAnchor
                           (BinaryOp (".",
                                      (Identifier "EMPLOYEES", Pos (20, 28)),
                                      (Identifier "FIRST_NAME", Pos (30, 39))),
@@ -1233,7 +1233,7 @@ END;
                    Pos (52, 59))]),
               Pos (11, 65));
              (VarDecl ("PT",
-                       (Record
+                       (TypeName
                           (Identifier "POINT", Pos (72, 76)),
                         Pos (72, 76))),
               Pos (69, 77))],
@@ -1259,6 +1259,40 @@ END;
               Pos (101, 117))]),
          Pos (1, 122))],
      Pos (1, 122));;
+
+let test_parse_table_type_1 () =
+  test_parse_helper "
+DECLARE
+  TYPE f1_table IS TABLE OF table.f1%TYPE;
+  TYPE f2_table IS TABLE OF table.f2%TYPE;
+BEGIN
+  NULL;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(TableDecl
+                ((Identifier "F1_TABLE", Pos (16, 23)),
+                 (TypeAnchor
+                    (BinaryOp (".",
+                               (Identifier "TABLE", Pos (37, 41)),
+                               (Identifier "F1", Pos (43, 44))),
+                     Pos (37, 44)),
+                  Pos (37, 49))),
+              Pos (11, 50));
+             (TableDecl
+                ((Identifier "F2_TABLE", Pos (59, 66)),
+                 (TypeAnchor
+                    (BinaryOp (".",
+                               (Identifier "TABLE", Pos (80, 84)),
+                               (Identifier "F2", Pos (86, 87))),
+                     Pos (80, 87)),
+                  Pos (80, 92))),
+              Pos (54, 93))],
+            [(StmtNull, Pos (103, 107))]),
+         Pos (1, 112))],
+     Pos (1, 112));;
 
 let test_parse_commit_1 () =
   test_parse_helper "
@@ -1349,8 +1383,8 @@ let test_parse_cursor_3 () =
   test_parse_helper "
 DECLARE
   CURSOR c1 IS SELECT field1, field2 FROM table;
-  v1 table.field1%type;
-  v2 table.field2%type;
+  v1 table.field1%TYPE;
+  v2 table.field2%TYPE;
 BEGIN
   OPEN c1;
   LOOP
@@ -1381,7 +1415,7 @@ END;
                   Pos (24, 55))),
               Pos (11, 56));
              (VarDecl ("V1",
-                       (Type
+                       (TypeAnchor
                           (BinaryOp (".",
                                      (Identifier "TABLE", Pos (63, 67)),
                                      (Identifier "FIELD1", Pos (69, 74))),
@@ -1389,7 +1423,7 @@ END;
                         Pos (63, 79))),
               Pos (60, 80));
              (VarDecl ("V2",
-                       (Type
+                       (TypeAnchor
                           (BinaryOp (".",
                                      (Identifier "TABLE", Pos (87, 91)),
                                      (Identifier "FIELD2", Pos (93, 98))),
@@ -1432,6 +1466,69 @@ END;
               Pos (239, 247))]),
          Pos (1, 252))],
      Pos (1, 252));;
+
+let test_parse_cursor_bulk_collect_1 () =
+  test_parse_helper "
+DECLARE
+  TYPE f1_table IS TABLE OF table.f1%TYPE;
+  TYPE f2_table IS TABLE OF table.f2%TYPE;
+  CURSOR c1 IS SELECT f1, f2 FROM table;
+BEGIN
+  OPEN c1;
+  FETCH c1 BULK COLLECT INTO f1_table, f2_table;
+  CLOSE c1;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(TableDecl
+                ((Identifier "F1_TABLE", Pos (16, 23)),
+                 (TypeAnchor
+                    (BinaryOp (".",
+                               (Identifier "TABLE", Pos (37, 41)),
+                               (Identifier "F1", Pos (43, 44))),
+                     Pos (37, 44)),
+                  Pos (37, 49))),
+              Pos (11, 50));
+             (TableDecl
+                ((Identifier "F2_TABLE", Pos (59, 66)),
+                 (TypeAnchor
+                    (BinaryOp (".",
+                               (Identifier "TABLE", Pos (80, 84)),
+                               (Identifier "F2", Pos (86, 87))),
+                     Pos (80, 87)),
+                  Pos (80, 92))),
+              Pos (54, 93));
+             (CursorDecl
+                ((Identifier "C1", Pos (104, 105)),
+                 (Select
+                    {fields =
+                        [(Column
+                            (Identifier "F1", Pos (117, 118)),
+                          Pos (117, 118));
+                         (Column
+                            (Identifier "F2", Pos (121, 122)),
+                          Pos (121, 122))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "TABLE", Pos (129, 133))],
+                          Pos (124, 133))]},
+                  Pos (110, 133))),
+              Pos (97, 134))],
+            [(StmtOpen
+                (Identifier "C1", Pos (149, 150)),
+              Pos (144, 151));
+             (StmtFetchBulkCollect
+                ((Identifier "C1", Pos (161, 162)),
+                 [(Identifier "F1_TABLE", Pos (182, 189));
+                  (Identifier "F2_TABLE", Pos (192, 199))]),
+              Pos (155, 200));
+             (StmtClose
+                (Identifier "C1", Pos (210, 211)),
+              Pos (204, 212))]),
+         Pos (1, 217))],
+     Pos (1, 217));;
 
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
@@ -1499,6 +1596,14 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_typ_varchar_1;
                                   "test_parse_typ_varchar_2" >::
                                     test_parse_typ_varchar_2;
+                                  "test_parse_rowtype_anchor_1" >::
+                                    test_parse_rowtype_anchor_1;
+                                  "test_parse_type_anchor_1" >::
+                                    test_parse_type_anchor_1;
+                                  "test_parse_record_1" >::
+                                    test_parse_record_1;
+                                  "test_parse_table_type_1" >::
+                                    test_parse_table_type_1;
 
                                   "test_parse_create_function_1" >::
                                     test_parse_create_function_1;
@@ -1510,14 +1615,6 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_create_table_1" >::
                                     test_parse_create_table_1;
 
-                                  "test_parse_rowtype_anchor_1" >::
-                                    test_parse_rowtype_anchor_1;
-                                  "test_parse_type_anchor_1" >::
-                                    test_parse_type_anchor_1;
-
-                                  "test_parse_record_1" >::
-                                    test_parse_record_1;
-
                                   "test_parse_commit_1" >:: test_parse_commit_1;
                                   "test_parse_ignore_create_1" >::
                                     test_parse_ignore_create_1;
@@ -1527,4 +1624,6 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_cursor_1" >:: test_parse_cursor_1;
                                   "test_parse_cursor_2" >:: test_parse_cursor_2;
                                   "test_parse_cursor_3" >:: test_parse_cursor_3;
+                                  "test_parse_cursor_bulk_collect_1" >::
+                                    test_parse_cursor_bulk_collect_1;
                                 ]

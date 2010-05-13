@@ -81,6 +81,13 @@ let matching_sequence seqs =
 
 module Ast =
 struct
+  type cursor_expr_type =
+    | CursorFound
+    | CursorNotFound
+    | CursorRowCount
+    | CursorIsOpen
+    | CursorBulkRowCount
+    | CursorBulkExceptions
   type expression_ast =
     | NumericLiteral of string
     | StringLiteral of string
@@ -106,6 +113,7 @@ struct
                      * case_when list
                      * expression_ast_with_pos option)
     | SearchedCase of (case_when list * expression_ast_with_pos option)
+    | CursorExpr of expression_ast_with_pos * cursor_expr_type
   and case_when = CaseWhen of (expression_ast_with_pos * expression_ast_with_pos)
   and expression_ast_with_pos = expression_ast * pos
 
@@ -154,6 +162,7 @@ struct
     | ArgDecl of string * typ_with_pos
     | FieldDecl of string * typ_with_pos
     | RecordDecl of expression_ast_with_pos * plsql_ast_with_pos list
+    | CursorDecl of expression_ast_with_pos * select_ast_with_pos
     | StmtAssignment of expression_ast_with_pos * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
     | StmtIf of if_args
@@ -185,6 +194,9 @@ struct
         plsql_ast_with_pos
     | StmtReturn of expression_ast_with_pos option
     | StmtCreateTable of expression_ast_with_pos * plsql_ast_with_pos list
+    | StmtOpen of expression_ast_with_pos
+    | StmtClose of expression_ast_with_pos
+    | StmtFetch of expression_ast_with_pos * expression_ast_with_pos list
   and if_args = expression_ast_with_pos
       * plsql_ast_with_pos list
       * else_elseif
@@ -245,13 +257,26 @@ struct
                         | [(expr, _)] -> consume ")" <+> (result expr)
                         | exprs -> consume ")" <+> (result <| List(exprs)))
 
-  and parse_dotted_identifier_or_function_call () =
-    wrap_pos (parse_dotted_identifier () >>= fun (ident, ident_pos) ->
+  and parse_dotted_identifier_or_function_call_or_cursor_expression () =
+    wrap_pos (parse_dotted_identifier () >>= fun (ident, ident_pos as ident_with_pos) ->
                 lookahead >>= function
                   | Some(Token("(", _)) ->
                       (consume "("
                        <+> sep_by "," (parse_expression ()) >>= fun args ->
                          consume ")" <+> (result <| Call((ident, ident_pos), args)))
+                  | Some(Token("%", _)) ->
+                      (consume "%" <+> string_item >>= fun cursor_expr ->
+                         match cursor_expr with
+                           | "ISOPEN" -> result <| CursorExpr(ident_with_pos, CursorIsOpen)
+                           | "FOUND" -> result <| CursorExpr(ident_with_pos, CursorFound)
+                           | "NOTFOUND" -> result <| CursorExpr(ident_with_pos,
+                                                                CursorNotFound)
+                           | "ROWCOUNT" -> result <| CursorExpr(ident_with_pos,
+                                                                CursorRowCount)
+                           | "BULK_ROWCOUNT" -> result <| CursorExpr(ident_with_pos,
+                                                                     CursorBulkRowCount)
+                           | "BULK_EXCEPTIONS" -> result <| CursorExpr(ident_with_pos,
+                                                                       CursorBulkExceptions))
                   | _ ->
                       result ident)
 
@@ -318,7 +343,7 @@ struct
       | Some (Token("CASE", _)) ->
           parse_case ()
       | Some (Token(id, _)) when is_letter id.[0] || id.[0] = '_' || id.[0] = '*' ->
-          parse_dotted_identifier_or_function_call ()
+          parse_dotted_identifier_or_function_call_or_cursor_expression ()
       | _ ->
           warning "Expected an identifier, number or '('. Inserted a '_'." <+>
             get_next_pos >>= fun pos ->
@@ -651,6 +676,9 @@ let rec parse_statement () =
           parse_exit_or_continue "CONTINUE" simple with_when
     | Some (Token("CREATE", _)) -> parse_create ()
     | Some (Token("RETURN", _)) -> parse_return ()
+    | Some (Token("OPEN", _)) -> parse_open ()
+    | Some (Token("CLOSE", _)) -> parse_close ()
+    | Some (Token("FETCH", _)) -> parse_fetch ()
         (* Ignored statements (from SQL specification). *)
     | Some (Token("ALTER", _))
     | Some (Token("ANALYZE", _))
@@ -673,13 +701,25 @@ let rec parse_statement () =
     | Some (Token("RENAME", _))
     | Some (Token("REVOKE", _))
     | Some (Token("ROLLBACK", _))
-    | Some (Token("SET", _))
     | Some (Token("SAVEPOINT", _))
     | Some (Token("SET", _))
     | Some (Token("TRUNCATE", _))
     | Some (Token("UPDATE", _)) ->
         ignore_statement ()
     | _ -> parse_assignment_or_call ()
+
+and parse_fetch () =
+  wrap_pos (consume "FETCH" <+> parse_dotted_identifier >>= fun cursor_name ->
+              consume_or_fake "INTO" <+> sep_by "," parse_dotted_identifier >>= fun vars ->
+                parse_semicolon <+> (result <| StmtFetch(cursor_name, vars)))
+
+and parse_open () =
+  wrap_pos (consume "OPEN" <+> parse_dotted_identifier >>= fun cursor_name ->
+              parse_semicolon <+> (result <| StmtOpen(cursor_name)))
+
+and parse_close () =
+  wrap_pos (consume "CLOSE" <+> parse_dotted_identifier >>= fun cursor_name ->
+              parse_semicolon <+> (result <| StmtClose(cursor_name)))
 
 and ignore_statement () =
   let rec ignore_statement_iter nesting_level =
@@ -873,7 +913,7 @@ and parse_select_statement () =
 
 
 and parse_block () =
-  let parse_record_decl () =
+  let parse_record_decl =
     let parse_record_field =
       parse_field () >>= fun field ->
         parse_semicolon <+> (result field)
@@ -884,10 +924,17 @@ and parse_block () =
           consume_or_fake ")" <+> parse_semicolon
           <+> (result <| RecordDecl(type_name, members))
   in
+  let parse_cursor_decl =
+    consume "CURSOR" <+> parse_dotted_identifier >>= fun cursor_name ->
+      consume_or_fake "IS" <+> parse_select >>= fun select_expression ->
+        parse_semicolon <+> (result <| CursorDecl(cursor_name, select_expression))
+  in
   let parse_vardecl =
     wrap_pos (lookahead >>= function
                 | Some(Token("TYPE", _)) ->
-                    parse_record_decl ()
+                    parse_record_decl
+                | Some(Token("CURSOR", _)) ->
+                    parse_cursor_decl
                 | _ ->
                     string_item >>= fun variable ->
                       parse_type >>= fun var_type ->

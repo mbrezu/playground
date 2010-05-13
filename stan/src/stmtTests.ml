@@ -1287,6 +1287,152 @@ CREATE CONTEXT
     (Program [(StmtNull, Pos (1, 14))],
      Pos (1, 14));;
 
+let test_parse_cursor_1 () =
+  test_parse_helper "
+DECLARE
+  CURSOR c IS SELECT * FROM table;
+BEGIN
+  NULL;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(CursorDecl
+                ((Identifier "C", Pos (18, 18)),
+                 (Select
+                    {fields =
+                        [(Column
+                            (Identifier "*", Pos (30, 30)),
+                          Pos (30, 30))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "TABLE", Pos (37, 41))],
+                          Pos (32, 41))]},
+                  Pos (23, 41))),
+              Pos (11, 42))],
+            [(StmtNull, Pos (52, 56))]),
+         Pos (1, 61))],
+     Pos (1, 61));;
+
+let test_parse_cursor_2 () =
+  test_parse_helper "
+DECLARE
+  CURSOR c1 IS SELECT * FROM table;
+BEGIN
+  OPEN c1;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(CursorDecl
+                ((Identifier "C1", Pos (18, 19)),
+                 (Select
+                    {fields =
+                        [(Column
+                            (Identifier "*", Pos (31, 31)),
+                          Pos (31, 31))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "TABLE", Pos (38, 42))],
+                          Pos (33, 42))]},
+                  Pos (24, 42))),
+              Pos (11, 43))],
+            [(StmtOpen
+                (Identifier "C1", Pos (58, 59)),
+              Pos (53, 60))]),
+         Pos (1, 65))],
+     Pos (1, 65));;
+
+let test_parse_cursor_3 () =
+  test_parse_helper "
+DECLARE
+  CURSOR c1 IS SELECT field1, field2 FROM table;
+  v1 table.field1%type;
+  v2 table.field2%type;
+BEGIN
+  OPEN c1;
+  LOOP
+    FETCH c1 INTO v1, v2;
+    EXIT WHEN c1%NOTFOUND;
+    DBMS_OUTPUT.PUTLINE(v1 || ' ' || v2);
+  END LOOP;
+  CLOSE c1;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(CursorDecl
+                ((Identifier "C1", Pos (18, 19)),
+                 (Select
+                    {fields =
+                        [(Column
+                            (Identifier "FIELD1", Pos (31, 36)),
+                          Pos (31, 36));
+                         (Column
+                            (Identifier "FIELD2", Pos (39, 44)),
+                          Pos (39, 44))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "TABLE", Pos (51, 55))],
+                          Pos (46, 55))]},
+                  Pos (24, 55))),
+              Pos (11, 56));
+             (VarDecl ("V1",
+                       (Type
+                          (BinaryOp (".",
+                                     (Identifier "TABLE", Pos (63, 67)),
+                                     (Identifier "FIELD1", Pos (69, 74))),
+                           Pos (63, 74)),
+                        Pos (63, 79))),
+              Pos (60, 80));
+             (VarDecl ("V2",
+                       (Type
+                          (BinaryOp (".",
+                                     (Identifier "TABLE", Pos (87, 91)),
+                                     (Identifier "FIELD2", Pos (93, 98))),
+                           Pos (87, 98)),
+                        Pos (87, 103))),
+              Pos (84, 104))],
+            [(StmtOpen
+                (Identifier "C1", Pos (119, 120)),
+              Pos (114, 121));
+             (StmtLoop
+                ([(StmtFetch
+                     ((Identifier "C1", Pos (140, 141)),
+                      [(Identifier "V1", Pos (148, 149));
+                       (Identifier "V2", Pos (152, 153))]),
+                   Pos (134, 154));
+                  (StmtExitWhen
+                     ((CursorExpr
+                         ((Identifier "C1", Pos (170, 171)),
+                          CursorNotFound),
+                       Pos (170, 180)),
+                      None),
+                   Pos (160, 181));
+                  (StmtCall
+                     ((BinaryOp (".",
+                                 (Identifier "DBMS_OUTPUT", Pos (187, 197)),
+                                 (Identifier "PUTLINE", Pos (199, 205))),
+                       Pos (187, 205)),
+                      [(BinaryOp ("||",
+                                  (BinaryOp ("||",
+                                             (Identifier "V1", Pos (207, 208)),
+                                             (StringLiteral "' '", Pos (213, 215))),
+                                   Pos (207, 215)),
+                                  (Identifier "V2", Pos (220, 221))),
+                        Pos (207, 221))]),
+                   Pos (187, 223))],
+                 None),
+              Pos (125, 235));
+             (StmtClose
+                (Identifier "C1", Pos (245, 246)),
+              Pos (239, 247))]),
+         Pos (1, 252))],
+     Pos (1, 252));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -1377,4 +1523,8 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                     test_parse_ignore_create_1;
                                   "test_parse_ignore_create_2" >::
                                     test_parse_ignore_create_2;
+
+                                  "test_parse_cursor_1" >:: test_parse_cursor_1;
+                                  "test_parse_cursor_2" >:: test_parse_cursor_2;
+                                  "test_parse_cursor_3" >:: test_parse_cursor_3;
                                 ]

@@ -11,3 +11,7 @@ open Pwm;;
 
 #use "topfind";;
 #require "oUnit";;
+
+#print_depth 10000;;
+#print_length 10000;;
+

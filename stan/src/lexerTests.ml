@@ -31,8 +31,42 @@ let test_lex_string_literal () =
      Token ("'''Test2'''", Pos (9, 19));
      Token ("'Test3", Pos (21, 26))];;
 
+let test_convert_pos_1 () =
+  let positions = [0; 10; 20;] in
+  let text = "Some line,\nAnother line,\nLast line." in
+  let expected = [LineColumn(0, 0);
+                  LineColumn(0, 10);
+                  LineColumn(1, 9)] in
+  let actual = convert_pos_to_line_col text positions in
+    assert_equal expected actual;;
+
+let test_convert_pos_2 () =
+  let positions = [0; 10; 20; 100] in
+  let text = "Some line,\nAnother line,\nLast line." in
+  let expected = [LineColumn(0, 0);
+                  LineColumn(0, 10);
+                  LineColumn(1, 9);
+                  LineColumn(2, 10)] in
+  let actual = convert_pos_to_line_col text positions in
+    assert_equal expected actual;;
+
+let test_convert_pos_3 () =
+  let positions = [0; 10; 20; 35; 100; 200] in
+  let text = "Some line,\n\nAnother line,\nLast line." in
+  let expected = [LineColumn (0, 0);
+                  LineColumn (0, 10);
+                  LineColumn (2, 8);
+                  LineColumn (3, 9);
+                  LineColumn (3, 10);
+                  LineColumn (3, 10)] in
+  let actual = convert_pos_to_line_col text positions in
+    assert_equal expected actual;;
+
 let suite = "Lexer tests" >::: ["test_lex_begin_end" >:: test_lex_begin_end;
-                                 "test_lex_simple_select" >:: test_lex_simple_select;
-                                 "test_lex_string_literal" >:: test_lex_string_literal;
+                                "test_lex_simple_select" >:: test_lex_simple_select;
+                                "test_lex_string_literal" >:: test_lex_string_literal;
+                                "test_convert_pos_1" >:: test_convert_pos_1;
+                                "test_convert_pos_2" >:: test_convert_pos_2;
+                                "test_convert_pos_3" >:: test_convert_pos_3;
                                ]
 

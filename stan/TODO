@@ -30,7 +30,7 @@
 *** TODO for with cursors
 **** TODO implicit
 **** TODO explicit
-** TODO convert positions-in-stream to line/col pairs
+** DONE convert positions-in-stream to line/col pairs
 ** TODO SELECT INTO
 ** TODO dynamic pl/sql
 ** TODO collections and records

@@ -64,3 +64,33 @@ let tokenize str start_pos =
   in
     tokenize' str start_pos [];;
 
+let convert_pos_to_line_col text sorted_positions =
+  let text_len = String.length text in
+  let rec convert_pos_iter text_pos line column sorted_positions line_cols =
+    if text_pos >= text_len || sorted_positions = []
+    then
+      let rest_of_positions =
+        List.map (fun _ -> LineColumn(line, column)) sorted_positions
+      in
+        (List.rev line_cols) @ rest_of_positions
+    else
+      let is_newline = text.[text_pos] = '\n' in
+      let new_line = if is_newline then line + 1 else line in
+      let new_column = if is_newline then 0 else column + 1 in
+        if List.hd sorted_positions = text_pos
+        then
+            convert_pos_iter
+              (text_pos + 1)
+              new_line
+              new_column
+              (List.tl sorted_positions)
+              (LineColumn(line, column) :: line_cols)
+        else
+          convert_pos_iter
+            (text_pos + 1)
+            new_line
+            new_column
+            sorted_positions
+            line_cols
+  in
+    convert_pos_iter 0 0 0 sorted_positions [];;

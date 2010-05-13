@@ -276,7 +276,10 @@ struct
                            | "BULK_ROWCOUNT" -> result <| CursorExpr(ident_with_pos,
                                                                      CursorBulkRowCount)
                            | "BULK_EXCEPTIONS" -> result <| CursorExpr(ident_with_pos,
-                                                                       CursorBulkExceptions))
+                                                                       CursorBulkExceptions)
+                           | _ ->
+                               warning "Unknown cursor expression. Assumed '%ISOPEN'."
+                                 <+> (result <| CursorExpr(ident_with_pos, CursorIsOpen)))
                   | _ ->
                       result ident)
 

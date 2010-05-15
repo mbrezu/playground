@@ -32,7 +32,7 @@
 **** DONE implicit
 **** DONE explicit
 ** DONE convert positions-in-stream to line/col pairs
-** TODO SELECT INTO
+** DONE SELECT INTO
 ** TODO dynamic pl/sql
 ** TODO collections and records
 ** TODO triggers

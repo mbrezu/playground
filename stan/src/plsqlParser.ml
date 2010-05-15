@@ -130,6 +130,7 @@ struct
 
   and select_ast =
     | Select of select_components
+    | IntoClause of expression_ast_with_pos list
     | FromClause of table_expression_ast_with_pos list
     | WhereClause of expression_ast_with_pos
     | GroupByClause of expression_ast_with_pos list
@@ -460,9 +461,8 @@ struct
 
   and parse_select () =
     wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
-                parse_from_clause () >>= fun from_clause ->
                   parse_select_clauses [] >>= fun clauses ->
-                    result <| Select { fields = fields; clauses = from_clause :: clauses })
+                    result <| Select { fields = fields; clauses = clauses })
 
   and parse_select_clauses clauses =
     let clause_parser p =
@@ -470,6 +470,8 @@ struct
         parse_select_clauses (new_clause :: clauses)
     in
       lookahead_many 2 >>= function
+        | Some [Token ("FROM", _); _] -> clause_parser parse_from_clause
+        | Some [Token ("INTO", _); _] -> clause_parser parse_into_clause
         | Some [Token ("HAVING", _); _] -> clause_parser parse_having_clause
         | Some [Token ("GROUP", _); Token("BY", _)] -> clause_parser parse_group_by_clause
         | Some [Token ("ORDER", _); Token("BY", _)] -> clause_parser parse_order_by_clause
@@ -501,24 +503,34 @@ struct
   and parse_select_fields () =
     let parse_column =
       wrap_pos (parse_expression () >>= fun expr ->
-                  lookahead >>= function
-                    | Some(Token(tok, _)) when tok <> "FROM" && tok <> "," ->
-                        let make_alias alias_connector =
-                          string_item >>= fun alias ->
-                            result (ColumnAlias(alias_connector, expr, alias))
-                        in
-                          if tok = "AS"
-                          then consume "AS" <+> make_alias "AS"
-                          else make_alias ""
-                    | _ ->
-                        result <| Column(expr))
+                  let possible_alias tok =
+                    tok <> "FROM"
+                    && tok <> "INTO"
+                    && tok <> ","
+                  in
+                    lookahead >>= function
+                      | Some(Token(tok, _)) when possible_alias tok ->
+                          let make_alias alias_connector =
+                            string_item >>= fun alias ->
+                              result (ColumnAlias(alias_connector, expr, alias))
+                          in
+                            if tok = "AS"
+                            then consume "AS" <+> make_alias "AS"
+                            else make_alias ""
+                      | _ ->
+                          result <| Column(expr))
     in
       sep_by "," parse_column
 
   and parse_from_clause () =
-    wrap_pos (consume "FROM" >>= fun _ ->
-                parse_table_list () >>= fun tables ->
-                  result <| FromClause (tables))
+    wrap_pos (consume "FROM"
+              <+> parse_table_list () >>= fun tables ->
+                result <| FromClause (tables))
+
+  and parse_into_clause () =
+    wrap_pos (consume "INTO"
+              <+> sep_by "," (parse_dotted_identifier ()) >>= fun idents ->
+                result <| IntoClause(idents))
 
   and parse_table_with_alias () =
     let validate alias =

@@ -491,72 +491,110 @@ LEFT OUTER JOIN Table3 t3 ON t2.f2 = t3.f1
 let test_parse_group_by_having_1 () =
   let expected = (Select
                     {fields =
-                        [(Column (Identifier "PRODUCT", Pos (8, 14)), Pos (8, 14));
-                         (Column (Identifier "PRICE", Pos (17, 21)), Pos (17, 21))];
+                        [(Column
+                            (Identifier "PRODUCT", Pos (8, 14)),
+                          Pos (8, 14));
+                         (Column
+                            (Identifier "PRICE", Pos (17, 21)),
+                          Pos (17, 21))];
                      clauses =
-                        [(FromClause [(TableName "TABLE", Pos (29, 33))], Pos (24, 33));
+                        [(FromClause
+                            [(TableName "TABLE", Pos (28, 32))],
+                          Pos (23, 32));
                          (WhereClause
                             (BinaryOp (">=",
-                                       (Identifier "PRICE", Pos (42, 46)),
-                                       (NumericLiteral "10", Pos (51, 52))),
-                             Pos (42, 52)),
-                          Pos (36, 52));
+                                       (Identifier "PRICE", Pos (40, 44)),
+                                       (NumericLiteral "10", Pos (49, 50))),
+                             Pos (40, 50)),
+                          Pos (34, 50));
                          (GroupByClause
-                            [(Identifier "PRODUCT", Pos (64, 70));
-                             (Identifier "PRICE", Pos (73, 77))],
-                          Pos (55, 77));
+                            [(Identifier "PRODUCT", Pos (61, 67));
+                             (Identifier "PRICE", Pos (70, 74))],
+                          Pos (52, 74));
                          (HavingClause
                             (Like
-                               ((Identifier "PRODUCT", Pos (86, 92)),
-                                (StringLiteral "'Wheel%'", Pos (99, 106))),
-                             Pos (86, 106)),
-                          Pos (79, 106))]},
-                  Pos (1, 106))
-in
-  test_parse_select_helper
-    "
-SELECT Product, Price 
-FROM Table 
-WHERE Price >= 10 
+                               ((Identifier "PRODUCT", Pos (83, 89)),
+                                (StringLiteral "'Wheel%'", Pos (96, 103))),
+                             Pos (83, 103)),
+                          Pos (76, 103))]},
+                  Pos (1, 103))
+  in
+    test_parse_select_helper
+      "
+SELECT Product, Price
+FROM Table
+WHERE Price >= 10
 GROUP BY Product, Price
 HAVING Product LIKE 'Wheel%'"
-    []
-    expected
+      []
+      expected
 
 let test_parse_group_by_having_2 () =
   let expected = (Select
                     {fields =
-                        [(Column (Identifier "PRODUCT", Pos (8, 14)), Pos (8, 14));
-                         (Column (Identifier "PRICE", Pos (17, 21)), Pos (17, 21))];
+                        [(Column
+                            (Identifier "PRODUCT", Pos (8, 14)),
+                          Pos (8, 14));
+                         (Column
+                            (Identifier "PRICE", Pos (17, 21)),
+                          Pos (17, 21))];
                      clauses =
-                        [(FromClause [(TableName "TABLE", Pos (29, 33))], Pos (24, 33));
+                        [(FromClause
+                            [(TableName "TABLE", Pos (28, 32))],
+                          Pos (23, 32));
                          (WhereClause
                             (BinaryOp (">=",
-                                       (Identifier "PRICE", Pos (41, 45)),
-                                       (NumericLiteral "10", Pos (50, 51))),
-                             Pos (41, 51)),
-                          Pos (35, 51));
+                                       (Identifier "PRICE", Pos (40, 44)),
+                                       (NumericLiteral "10", Pos (49, 50))),
+                             Pos (40, 50)),
+                          Pos (34, 50));
                          (HavingClause
                             (Like
-                               ((Identifier "PRODUCT", Pos (61, 67)),
-                                (StringLiteral "'Wheel%'", Pos (74, 81))),
-                             Pos (61, 81)),
-                          Pos (54, 81));
+                               ((Identifier "PRODUCT", Pos (59, 65)),
+                                (StringLiteral "'Wheel%'", Pos (72, 79))),
+                             Pos (59, 79)),
+                          Pos (52, 79));
                          (GroupByClause
-                            [(Identifier "PRODUCT", Pos (92, 98));
-                             (Identifier "PRICE", Pos (101, 105))],
-                          Pos (83, 105))]},
-                  Pos (1, 105))
-in
-  test_parse_select_helper
-    "
-SELECT Product, Price 
+                            [(Identifier "PRODUCT", Pos (90, 96));
+                             (Identifier "PRICE", Pos (99, 103))],
+                          Pos (81, 103))]},
+                  Pos (1, 103))
+  in
+    test_parse_select_helper
+      "
+SELECT Product, Price
 FROM Table
-WHERE Price >= 10 
+WHERE Price >= 10
 HAVING Product LIKE 'Wheel%'
 GROUP BY Product, Price"
-    []
-    expected
+      []
+      expected
+
+let test_parse_select_into_1 () =
+  let expected = (Select
+                    {fields =
+                        [(Column
+                            (Identifier "TOWN", Pos (7, 10)),
+                          Pos (7, 10))];
+                     clauses =
+                        [(IntoClause
+                            [(Identifier "V_TOWN", Pos (17, 22))],
+                          Pos (12, 22));
+                         (FromClause
+                            [(TableName "ADDRESSES", Pos (29, 37))],
+                          Pos (24, 37));
+                         (WhereClause
+                            (BinaryOp ("=",
+                                       (Identifier "ADDRESSID", Pos (45, 53)),
+                                       (NumericLiteral "1", Pos (57, 57))),
+                             Pos (45, 57)),
+                          Pos (39, 57))]},
+                  Pos (0, 57))
+  in
+    test_parse_select_helper
+      "SELECT town INTO v_town FROM addresses WHERE addressid = 1"
+      []
+      expected
 
 let suite = "Select tests" >::: ["test_parse_simple_select_1" >::
                                    test_parse_simple_select_1;
@@ -584,4 +622,5 @@ let suite = "Select tests" >::: ["test_parse_simple_select_1" >::
                                    test_parse_group_by_having_1;
                                  "test_parse_group_by_having_2" >::
                                    test_parse_group_by_having_2;
+                                 "test_parse_select_into_1" >:: test_parse_select_into_1;
                                 ]

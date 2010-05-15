@@ -21,7 +21,7 @@
 ** DONE %ROWTYPE, %TYPE
 ** DONE RECORD types
 ** DONE transaction processing
-** TODO cursors
+** DONE cursors
 *** DONE bulk collect
 **** DONE table types
 *** DONE cursor parameters
@@ -33,7 +33,15 @@
 **** DONE explicit
 ** DONE convert positions-in-stream to line/col pairs
 ** DONE SELECT INTO
+** TODO update
+** TODO delete
+** TODO insert
+** TODO drop
+** TODO alter table
 ** TODO dynamic pl/sql
+*** TODO ref cursor
+*** TODO OPEN ... FOR
+*** TODO EXECUTE IMMEDIATE
 ** TODO collections and records
 ** TODO triggers
 ** TODO indexes

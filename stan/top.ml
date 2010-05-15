@@ -3,11 +3,13 @@
 #load "parserTypes.cmo";;
 #load "lexer.cmo";;
 #load "plsqlParser.cmo";;
+#load "absint.cmo";;
 
 open PlsqlParser;;
 open Lexer;;
 open ParserTypes;;
 open Pwm;;
+open Absint;;
 
 #use "topfind";;
 #require "oUnit";;

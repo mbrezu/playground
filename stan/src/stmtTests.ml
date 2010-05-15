@@ -1882,4 +1882,4 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_cursor_6" >:: test_parse_cursor_6;
                                   "test_parse_cursor_7" >:: test_parse_cursor_7;
                                   "test_parse_cursor_8" >:: test_parse_cursor_8;
-                                ]
+                                ];;

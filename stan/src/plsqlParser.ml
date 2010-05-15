@@ -731,6 +731,7 @@ let rec parse_statement () =
     | Some (Token("DELETE", _))
     | Some (Token("DISASSOCIATE", _))
     | Some (Token("DROP", _))
+    | Some (Token("EXECUTE", _))
     | Some (Token("EXPLAIN", _))
     | Some (Token("FLASHBACK", _))
     | Some (Token("GRANT", _))

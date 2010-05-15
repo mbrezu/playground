@@ -24,12 +24,13 @@
 ** TODO cursors
 *** DONE bulk collect
 **** DONE table types
-*** TODO cursor parameters
-**** TODO with for
-**** TODO with open
-*** TODO for with cursors
-**** TODO implicit
-**** TODO explicit
+*** DONE cursor parameters
+**** DONE declaration
+**** DONE with for
+**** DONE with open
+*** DONE for with cursors
+**** DONE implicit
+**** DONE explicit
 ** DONE convert positions-in-stream to line/col pairs
 ** TODO SELECT INTO
 ** TODO dynamic pl/sql

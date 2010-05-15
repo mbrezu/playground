@@ -1530,6 +1530,257 @@ END;
          Pos (1, 217))],
      Pos (1, 217));;
 
+let test_parse_cursor_4 () =
+  test_parse_helper "
+DECLARE
+  CURSOR c1 (p1 NUMBER, p2 NUMBER) IS
+  SELECT * FROM table WHERE f1 >= p1 AND f1 <= p2;
+BEGIN
+  NULL;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(ParameterizedCursorDecl
+                ((Identifier "C1", Pos (18, 19)),
+                 [(ArgDecl ("P1",
+                            (Number (38, 127), Pos (25, 30))),
+                   Pos (22, 30));
+                  (ArgDecl ("P2",
+                            (Number (38, 127), Pos (36, 41))),
+                   Pos (33, 41))],
+                 (Select
+                    {fields =
+                        [(Column
+                            (Identifier "*", Pos (56, 56)),
+                          Pos (56, 56))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "TABLE", Pos (63, 67))],
+                          Pos (58, 67));
+                         (WhereClause
+                            (BinaryOp ("AND",
+                                       (BinaryOp (">=",
+                                                  (Identifier "F1", Pos (75, 76)),
+                                                  (Identifier "P1", Pos (81, 82))),
+                                        Pos (75, 82)),
+                                       (BinaryOp ("<=",
+                                                  (Identifier "F1", Pos (88, 89)),
+                                                  (Identifier "P2", Pos (94, 95))),
+                                        Pos (88, 95))),
+                             Pos (75, 95)),
+                          Pos (69, 95))]},
+                  Pos (49, 95))),
+              Pos (11, 96))],
+            [(StmtNull, Pos (106, 110))]),
+         Pos (1, 115))],
+     Pos (1, 115));;
+
+let test_parse_cursor_5 () =
+  test_parse_helper "
+DECLARE
+  CURSOR c1 (p1 NUMBER, p2 NUMBER) IS
+  SELECT * FROM table WHERE f1 >= p1 AND f1 <= p2;
+BEGIN
+  OPEN c1(10, 20);
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(ParameterizedCursorDecl
+                ((Identifier "C1", Pos (18, 19)),
+                 [(ArgDecl ("P1",
+                            (Number (38, 127), Pos (25, 30))),
+                   Pos (22, 30));
+                  (ArgDecl ("P2",
+                            (Number (38, 127), Pos (36, 41))),
+                   Pos (33, 41))],
+                 (Select
+                    {fields =
+                        [(Column
+                            (Identifier "*", Pos (56, 56)),
+                          Pos (56, 56))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "TABLE", Pos (63, 67))],
+                          Pos (58, 67));
+                         (WhereClause
+                            (BinaryOp ("AND",
+                                       (BinaryOp (">=",
+                                                  (Identifier "F1", Pos (75, 76)),
+                                                  (Identifier "P1", Pos (81, 82))),
+                                        Pos (75, 82)),
+                                       (BinaryOp ("<=",
+                                                  (Identifier "F1", Pos (88, 89)),
+                                                  (Identifier "P2", Pos (94, 95))),
+                                        Pos (88, 95))),
+                             Pos (75, 95)),
+                          Pos (69, 95))]},
+                  Pos (49, 95))),
+              Pos (11, 96))],
+            [(StmtOpenParameterized
+                ((Identifier "C1", Pos (111, 112)),
+                 [(NumericLiteral "10", Pos (114, 115));
+                  (NumericLiteral "20", Pos (118, 119))]),
+              Pos (106, 121))]),
+         Pos (1, 126))],
+     Pos (1, 126));;
+
+let test_parse_cursor_6 () =
+  test_parse_helper "
+DECLARE
+  CURSOR c1 IS SELECT * FROM ADDRESSES;
+BEGIN
+  FOR rec IN c1
+  LOOP
+    DBMS_OUTPUT.PUT_LINE(rec.town);
+  END LOOP;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(CursorDecl
+                ((Identifier "C1", Pos (18, 19)),
+                 (Select
+                    {fields =
+                        [(Column
+                            (Identifier "*", Pos (31, 31)),
+                          Pos (31, 31))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "ADDRESSES", Pos (38, 46))],
+                          Pos (33, 46))]},
+                  Pos (24, 46))),
+              Pos (11, 47))],
+            [(StmtForCursor
+                ((Identifier "REC", Pos (61, 63)), false,
+                 (Identifier "C1", Pos (68, 69)),
+                 (StmtLoop
+                    ([(StmtCall
+                         ((BinaryOp (".",
+                                     (Identifier "DBMS_OUTPUT", Pos (82, 92)),
+                                     (Identifier "PUT_LINE", Pos (94, 101))),
+                           Pos (82, 101)),
+                          [(BinaryOp (".",
+                                      (Identifier "REC", Pos (103, 105)),
+                                      (Identifier "TOWN", Pos (107, 110))),
+                            Pos (103, 110))]),
+                       Pos (82, 112))],
+                     None),
+                  Pos (73, 124))),
+              Pos (57, 124))]),
+         Pos (1, 129))],
+     Pos (1, 129));;
+
+let test_parse_cursor_7 () =
+  test_parse_helper "
+BEGIN
+  FOR rec IN (SELECT * FROM addresses)
+  LOOP
+    DBMS_OUTPUT.PUT_LINE(rec.town);
+  END LOOP;
+END;
+"
+    []
+    (Program
+       [(Block ([],
+                [(StmtForCursor
+                    ((Identifier "REC", Pos (13, 15)), false,
+                     (Subquery
+                        (Select
+                           {fields =
+                               [(Column
+                                   (Identifier "*", Pos (28, 28)),
+                                 Pos (28, 28))];
+                            clauses =
+                               [(FromClause
+                                   [(TableName "ADDRESSES", Pos (35, 43))],
+                                 Pos (30, 43))]},
+                         Pos (21, 43)),
+                      Pos (20, 44)),
+                     (StmtLoop
+                        ([(StmtCall
+                             ((BinaryOp (".",
+                                         (Identifier "DBMS_OUTPUT", Pos (57, 67)),
+                                         (Identifier "PUT_LINE", Pos (69, 76))),
+                               Pos (57, 76)),
+                              [(BinaryOp (".",
+                                          (Identifier "REC", Pos (78, 80)),
+                                          (Identifier "TOWN", Pos (82, 85))),
+                                Pos (78, 85))]),
+                           Pos (57, 87))],
+                         None),
+                      Pos (48, 99))),
+                  Pos (9, 99))]),
+         Pos (1, 104))],
+     Pos (1, 104));;
+
+let test_parse_cursor_8 () =
+  test_parse_helper "
+DECLARE
+  CURSOR c(town_prefix VARCHAR2) IS
+  SELECT * FROM addresses WHERE town LIKE town_prefix || '%';
+BEGIN
+  FOR rec IN c('B')
+  LOOP
+    DBMS_OUTPUT.PUT_LINE(rec.town);
+  END LOOP;
+END;
+"
+    []
+    (Program
+       [(Block
+           ([(ParameterizedCursorDecl
+                ((Identifier "C", Pos (18, 18)),
+                 [(ArgDecl ("TOWN_PREFIX",
+                            (Varchar2NoSize, Pos (32, 39))),
+                   Pos (20, 39))],
+                 (Select
+                    {fields =
+                        [(Column
+                            (Identifier "*", Pos (54, 54)),
+                          Pos (54, 54))];
+                     clauses =
+                        [(FromClause
+                            [(TableName "ADDRESSES", Pos (61, 69))],
+                          Pos (56, 69));
+                         (WhereClause
+                            (Like
+                               ((Identifier "TOWN", Pos (77, 80)),
+                                (BinaryOp ("||",
+                                           (Identifier "TOWN_PREFIX",
+                                            Pos (87, 97)),
+                                           (StringLiteral "'%'", Pos (102, 104))),
+                                 Pos (87, 104))),
+                             Pos (77, 104)),
+                          Pos (71, 104))]},
+                  Pos (47, 104))),
+              Pos (11, 105))],
+            [(StmtForParameterizedCursor
+                ((Identifier "REC", Pos (119, 121)), false,
+                 (Identifier "C", Pos (126, 126)),
+                 [(StringLiteral "'B'", Pos (128, 130))],
+                 (StmtLoop
+                    ([(StmtCall
+                         ((BinaryOp (".",
+                                     (Identifier "DBMS_OUTPUT",
+                                      Pos (144, 154)),
+                                     (Identifier "PUT_LINE", Pos (156, 163))),
+                           Pos (144, 163)),
+                          [(BinaryOp (".",
+                                      (Identifier "REC", Pos (165, 167)),
+                                      (Identifier "TOWN", Pos (169, 172))),
+                            Pos (165, 172))]),
+                       Pos (144, 174))],
+                     None),
+                  Pos (135, 186))),
+              Pos (115, 186))]),
+         Pos (1, 191))],
+     Pos (1, 191));;
+
 let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_end;
                                   "test_parse_declare_begin_end" >::
                                     test_parse_declare_begin_end;
@@ -1626,4 +1877,9 @@ let suite = "Select tests" >::: [ "test_parse_begin_end" >:: test_parse_begin_en
                                   "test_parse_cursor_3" >:: test_parse_cursor_3;
                                   "test_parse_cursor_bulk_collect_1" >::
                                     test_parse_cursor_bulk_collect_1;
+                                  "test_parse_cursor_4" >:: test_parse_cursor_4;
+                                  "test_parse_cursor_5" >:: test_parse_cursor_5;
+                                  "test_parse_cursor_6" >:: test_parse_cursor_6;
+                                  "test_parse_cursor_7" >:: test_parse_cursor_7;
+                                  "test_parse_cursor_8" >:: test_parse_cursor_8;
                                 ]

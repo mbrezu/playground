@@ -145,6 +145,8 @@ struct
     | Number of int * int
     | Varchar of int
     | Varchar2 of int
+    | VarcharNoSize
+    | Varchar2NoSize
     | Date
     | RowTypeAnchor of expression_ast_with_pos
     | TypeAnchor of expression_ast_with_pos
@@ -163,6 +165,9 @@ struct
     | FieldDecl of string * typ_with_pos
     | RecordDecl of expression_ast_with_pos * plsql_ast_with_pos list
     | CursorDecl of expression_ast_with_pos * select_ast_with_pos
+    | ParameterizedCursorDecl of expression_ast_with_pos *
+        plsql_ast_with_pos list *
+        select_ast_with_pos
     | TableDecl of expression_ast_with_pos * typ_with_pos
     | StmtAssignment of expression_ast_with_pos * expression_ast_with_pos
     | StmtSelect of select_ast_with_pos
@@ -177,6 +182,15 @@ struct
         bool *
         expression_ast_with_pos *
         expression_ast_with_pos *
+        plsql_ast_with_pos
+    | StmtForCursor of expression_ast_with_pos *
+        bool *
+        expression_ast_with_pos *
+        plsql_ast_with_pos
+    | StmtForParameterizedCursor of expression_ast_with_pos *
+        bool *
+        expression_ast_with_pos *
+        expression_ast_with_pos list *
         plsql_ast_with_pos
     | StmtWhile of expression_ast_with_pos * plsql_ast_with_pos
     | StmtGoto of expression_ast_with_pos
@@ -196,6 +210,7 @@ struct
     | StmtReturn of expression_ast_with_pos option
     | StmtCreateTable of expression_ast_with_pos * plsql_ast_with_pos list
     | StmtOpen of expression_ast_with_pos
+    | StmtOpenParameterized of expression_ast_with_pos * expression_ast_with_pos list
     | StmtClose of expression_ast_with_pos
     | StmtFetch of expression_ast_with_pos * expression_ast_with_pos list
     | StmtFetchBulkCollect of expression_ast_with_pos * expression_ast_with_pos list
@@ -600,13 +615,22 @@ let parse_type =
     (if one_or_two = 1
      then consume "VARCHAR"
      else consume "VARCHAR2")
-    <+> consume "(" <+> string_item >>= fun size ->
-      let varchar_type =
-        if one_or_two = 1
-        then Varchar(int_of_string(size))
-        else  Varchar2(int_of_string(size))
-      in
-        consume ")" <+> result varchar_type
+    <+> lookahead >>= function
+      | Some(Token("(", _)) ->
+          (consume "(" <+> string_item >>= fun size ->
+             let varchar_type =
+               if one_or_two = 1
+               then Varchar(int_of_string(size))
+               else  Varchar2(int_of_string(size))
+             in
+               consume ")" <+> result varchar_type)
+      | _ ->
+          (let varchar_type =
+             if one_or_two = 1
+             then VarcharNoSize
+             else  Varchar2NoSize
+           in
+             result varchar_type)
   in
     wrap_pos (lookahead >>= function
                 | Some(Token("NUMBER", _)) ->
@@ -734,7 +758,15 @@ and parse_fetch () =
 
 and parse_open () =
   wrap_pos (consume "OPEN" <+> parse_dotted_identifier >>= fun cursor_name ->
-              parse_semicolon <+> (result <| StmtOpen(cursor_name)))
+              lookahead >>= function
+                | Some(Token("(", _)) ->
+                    (consume "("
+                     <+> sep_by "," parse_expression >>= fun exprs ->
+                       consume ")"
+                       <+> parse_semicolon
+                       <+> (result <| StmtOpenParameterized(cursor_name, exprs)))
+                | _ ->
+                    parse_semicolon <+> (result <| StmtOpen(cursor_name)))
 
 and parse_close () =
   wrap_pos (consume "CLOSE" <+> parse_dotted_identifier >>= fun cursor_name ->
@@ -849,16 +881,34 @@ and parse_goto_statement () =
 and parse_for_statement () =
   let parse_for index_variable reversed =
     parse_expression >>= fun index_start ->
-      consume "." <+> consume "." <+> parse_expression >>= fun index_end ->
-        lookahead >>= function
-          | Some(Token("LOOP", _)) ->
-              (parse_loop_statement () >>= fun loop_statement ->
-                 result <| StmtFor(index_variable,
-                                   reversed,
-                                   index_start,
-                                   index_end,
-                                   loop_statement))
-          | _ -> error "Expected 'LOOP'."
+      lookahead >>= function
+        | Some(Token(".", _)) ->
+            (consume "." <+> consume "." <+> parse_expression >>= fun index_end ->
+               lookahead >>= function
+                 | Some(Token("LOOP", _)) ->
+                     (parse_loop_statement () >>= fun loop_statement ->
+                        result <| StmtFor(index_variable,
+                                          reversed,
+                                          index_start,
+                                          index_end,
+                                          loop_statement))
+                 | _ -> error "Expected 'LOOP'.")
+        | Some(Token("LOOP", _)) ->
+            (parse_loop_statement () >>= fun loop_statement ->
+               match index_start with
+                 | Call(called, params), _ ->
+                     result <| StmtForParameterizedCursor(index_variable,
+                                                          reversed,
+                                                          called,
+                                                          params,
+                                                          loop_statement)
+                 | _ ->
+                     result <| StmtForCursor(index_variable,
+                                             reversed,
+                                             index_start,
+                                             loop_statement))
+        | _ ->
+            error "Expected 'LOOP' or '..'."
   in
     wrap_pos (consume "FOR" <+> parse_dotted_identifier >>= fun index_variable ->
                 consume "IN" <+> lookahead >>= function
@@ -931,9 +981,26 @@ and parse_select_statement () =
 
 and parse_block () =
   let parse_cursor_decl =
-    consume "CURSOR" <+> parse_dotted_identifier >>= fun cursor_name ->
-      consume_or_fake "IS" <+> parse_select >>= fun select_expression ->
-        parse_semicolon <+> (result <| CursorDecl(cursor_name, select_expression))
+    consume "CURSOR"
+    <+> parse_dotted_identifier >>= fun cursor_name ->
+      lookahead >>= function
+        | Some(Token("IS", _)) ->
+            (consume_or_fake "IS"
+             <+> parse_select >>= fun select_expression ->
+               parse_semicolon
+               <+> (result <| CursorDecl(cursor_name, select_expression)))
+        | Some(Token("(", _)) ->
+            (consume_or_fake "("
+             <+> sep_by "," parse_arg_decl >>= fun cursor_arguments ->
+               consume_or_fake ")"
+               <+> consume_or_fake "IS"
+               <+> parse_select >>= fun select_expression ->
+                 parse_semicolon
+                 <+> (result <| ParameterizedCursorDecl(cursor_name,
+                                                        cursor_arguments,
+                                                        select_expression)))
+        | _ ->
+            error "Expected 'IS' or '('."
   in
   let parse_type_decl =
     let parse_record_decl type_name =

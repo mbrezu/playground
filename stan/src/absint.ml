@@ -1,36 +1,58 @@
 
+(* ABSINT is short for 'Abstract Interpreter'.
+
+   This file contains some experiments with a state monad enriched
+   with backtracking support. I plan to use it to write the STAN
+   abstract interpreter. The simple version below contains an abstract
+   interpreter for a language with integer variables, assignment,
+   looping and alternatives (if statement).
+
+   Nested scopes and GOTO mean that the version for Plsql version will
+   be more complicated.
+
+*)
+
 open Utils;;
 open Printf;;
-open PlsqlParser.Ast;;
+(* open PlsqlParser.Ast;; *)
 
-type ('a, 'b) absint = AbsintM of ('a -> 'a * 'b list) * ('a list -> 'a);;
+type ('a, 'b) absint_monad = AbsintM of ('a -> 'a * 'b option)
 
-let result k state_combiner = AbsintM ((fun state -> state, k),
-                                       state_combiner);;
+let run_absint (AbsintM(f)) state = f state;;
 
-let run_absint (AbsintM(f, _)) state = f state;;
-
-let bind m f =
-  let AbsintM(_, state_combiner) = m in
-    AbsintM ((fun st ->
-                let new_state, results = run_absint m st in
-                let conts = List.map f results in
-                let states_and_results =
-                  List.map (fun cont -> run_absint cont new_state) conts in
-                let states = List.map fst states_and_results in
-                let results = List.map snd states_and_results |> List.concat in
-                  (state_combiner states, results)),
-             state_combiner);;
+let bind m f = AbsintM(fun state ->
+                         let new_state, maybe_result = run_absint m state in
+                           match maybe_result with
+                             | Some k ->
+                                 let new_absint = f k in
+                                   run_absint new_absint new_state
+                             | None ->
+                                 new_state, None);;
 
 let (>>=) m f = bind m f;;
 
-let (<|>) m1 m2 =
-  let AbsintM(_, state_combiner) = m1 in
-    AbsintM ((fun st ->
-                let new_state1, results1 = run_absint m1 st in
-                let new_state2, results2 = run_absint m2 st in
-                  ((state_combiner [new_state1; new_state2]), results1 @ results2)),
-             state_combiner);;
+let (<+>) m1 m2 = m1 >>= fun _ -> m2;;
+
+let result k = AbsintM(fun state -> state, Some k);;
+
+let error = AbsintM(fun state -> state, None);;
+
+let get_state = AbsintM(fun state -> state, Some state);;
+
+let set_state new_state = AbsintM(fun state -> new_state, Some ());;
+
+let update_state f =
+  get_state >>= fun state ->
+    set_state (f state);;
+
+let amb state_combiner result_combiner ms =
+  AbsintM(fun state ->
+            let states_results = List.map (fun m -> run_absint m state) ms in
+            let states = List.map fst states_results in
+            let results = List.map snd states_results in
+            let new_state = state_combiner states in
+            let result = result_combiner results in
+              (new_state, result));;
 
 type expr =
   | Number of int
@@ -51,8 +73,8 @@ let program_1 = Seq [Declare "a";
                      Declare "b";
                      Assignment("a", Sum(Number 1, Number 2));
                      Alternative(LessThan(Var "a", Var "b"),
-                                 Assignment("a", Var("b")),
-                                 Nop)];;
+                                 Assignment("a", Number 34),
+                                 Assignment("a", Number 2))];;
 
 type var_state =
   | Uninitialized
@@ -61,83 +83,137 @@ type var_state =
 
 module VarMap = Map.Make(String);;
 
-let result k new_message = AbsintM ((fun state -> new_message @ state, k),
-                                    List.concat);;
 
-let (<+>) m1 m2 = m1 >>= fun _ -> m2;;
 
-let print_vars vars =
+(* Specialization of the backtracking state monad above. *)
+let add_message message =
+  update_state (fun (var_map, messages) -> (var_map, message :: messages));;
+
+let combine_vals expr1 expr2 =
+  match (expr1, expr2) with
+    | Unknown, Unknown -> Unknown
+    | _ -> Uninitialized;;
+
+let absint_amb m1 m2 =
+  let combine_var_maps var_maps =
+    let combine_maps map1 map2 =
+      VarMap.fold
+        (fun key value other_map ->
+           let combined_value =
+             if VarMap.mem key other_map
+             then combine_vals value (VarMap.find key other_map)
+             else value
+           in
+             VarMap.add key combined_value other_map)
+        map1
+        map2
+    in
+      List.fold_left combine_maps VarMap.empty var_maps
+  in
+  let combine_states states =
+    let combine_two_states state1 state2 =
+      let var_map1, messages1 = state1 in
+      let var_map2, messages2 = state2 in
+      let var_map = combine_var_maps [var_map1; var_map2] in
+      let messages = messages1 @ messages2 in
+        (var_map, messages)
+    in
+      List.fold_left combine_two_states (List.hd states) (List.tl states)
+  in
+    amb combine_states (const (Some ())) [m1; m2];;
+
+let set_vars new_vars =
+  get_state >>= fun (_, messages) ->
+    set_state (new_vars, messages);;
+
+let get_vars =
+  get_state >>= fun (vars, _) ->
+    result vars;;
+
+let save_messages =
+  get_state >>= fun (var_map, messages) ->
+    set_state (var_map, [])
+    <+> (result messages);;
+
+let restore_messages messages =
+  get_state >>= fun (var_map, current_messages) ->
+    set_state (var_map, current_messages @ messages);;
+
+let dump_var_map vars =
   VarMap.iter
     (fun key value ->
        let value_str = match value with
-         | Uninitialized -> "uninitialized"
-         | Unknown -> "unknown"
+         | Uninitialized -> "Uninitialized"
+         | Unknown -> "Unknown"
        in
-         printf "%s %s\n" key value_str)
+         printf "'%s' -> %s\n" key value_str)
     vars;;
 
-let rec int_abs program vars =
+let rec int_abs program =
   match program with
     | Seq statements ->
-        result [vars] ["Seq"] <+> chain statements vars
+        add_message "Seq"
+        <+> chain statements
     | Assignment(var, expr) ->
-        ((if VarMap.mem var vars
-          then result [vars] []
-          else result [vars] [sprintf "Undeclared variable '%s'." var])
-         <+> eval expr vars >>= fun value ->
-           let new_vars = VarMap.add var value vars in
-             result [new_vars] [])
+        (add_message "Assignment"
+         <+> get_vars >>= fun vars ->
+           (if not (VarMap.mem var vars)
+            then add_message (sprintf "Undeclared variable '%s'." var)
+            else result ())
+           <+> eval expr >>= fun value ->
+             let new_vars = VarMap.add var value vars in
+               set_vars new_vars)
     | Declare var ->
-        let new_vars = VarMap.add var Uninitialized vars in
-          result [new_vars] [sprintf "Declare '%s'." var]
+        (get_vars >>= fun vars ->
+           let new_vars = VarMap.add var Uninitialized vars in
+             set_vars new_vars
+             <+> add_message (sprintf "Declare '%s'." var))
     | Nop ->
-        result [vars] ["Nop"]
+        add_message "Nop"
     | While(cond, body) ->
-        result [vars] ["While"]
-        <+> eval cond vars
-        <+> int_abs body vars
+        add_message "While"
+        <+> eval cond
+        <+> int_abs body
     | Alternative(cond, then_body, else_body) ->
-        result [vars] ["Alternative"]
-        <+> eval cond vars
-        <+> ((int_abs then_body vars) <|> (int_abs else_body vars))
-    | _ ->
-        failwith "gigeeeleeee"
+        (add_message "Alternative"
+         <+> eval cond
+         <+> save_messages >>= fun current_messages ->
+           (absint_amb (int_abs then_body) (int_abs else_body))
+           <+> restore_messages current_messages)
 
-and eval expr vars =
+and eval expr =
   match expr with
-    | Number _ -> result [Unknown] []
+    | Number _ -> result Unknown
     | Sum(expr1, expr2)
     | LessThan(expr1, expr2)
     | Equal(expr1, expr2)  ->
-        (eval expr1 vars >>= fun val1 ->
-           eval expr2 vars >>= fun val2 ->
-             result [combine_vals val1 val2] [])
+        (eval expr1 >>= fun val1 ->
+           eval expr2 >>= fun val2 ->
+             result (combine_vals val1 val2))
     | Var var ->
-        if not (VarMap.mem var vars)
-        then result [Unknown] [sprintf "Undeclared variable '%s'." var]
-        else
-          let variable_state = VarMap.find var vars in
-            match variable_state with
-              | Uninitialized ->
-                  result [Uninitialized] [sprintf "Uninitialized variable '%s'." var]
-              | Unknown ->
-                  result [Unknown] []
+        get_vars >>= fun vars ->
+          if not (VarMap.mem var vars)
+          then
+            add_message (sprintf "Undeclared variable '%s'." var)
+            <+> result Uninitialized
+          else
+            let variable_state = VarMap.find var vars in
+              match variable_state with
+                | Uninitialized ->
+                    add_message (sprintf "Uninitialized variable '%s'." var)
+                    <+> result Uninitialized
+                | Unknown ->
+                    result Unknown
 
-and combine_vals expr1 expr2 =
-  match (expr1, expr2) with
-    | Unknown, Unknown -> Unknown
-    | Uninitialized, _ -> Uninitialized
-    | _, Uninitialized -> Uninitialized
-
-and chain statements vars =
+and chain statements =
   match statements with
     | hd :: tl ->
-        (int_abs hd vars >>= fun new_vars ->
-           chain tl new_vars)
+        int_abs hd <+> (chain tl)
     | [] ->
-        result [] [""]
+        result ()
 
 let run program =
-  let absint_monad = int_abs program VarMap.empty in
-  let state, vars = run_absint absint_monad [] in
-    (List.rev state, vars);;
+  let absint_monad = int_abs program in
+  let (vars, messages), _ = run_absint absint_monad (VarMap.empty, []) in
+    dump_var_map vars;
+    List.rev messages;;

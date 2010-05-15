@@ -53,7 +53,12 @@
 ** TODO simple abstract interpreter
    that traces 'executed' instructions on the console. Need it to
    figure out the abstract interpreter monad.
-
+*** DONE figure out monad
+*** TODO extend monad to support nested scopes and goto
+    test by enhancing the simple language that is used in absint.ml
+**** TODO add nested scopes and frames
+**** TODO add GOTO, BREAK and CONTINUE
+     (as in C, PLSQL has similar constructs - EXIT instead of BREAK)
 * Clarify usage:
 ** `IS OF`
 

@@ -65,8 +65,11 @@ type program =
   | Seq of program list
   | Declare of string
   | Assignment of string * expr
-  | Alternative of expr * program * program
+  | If of expr * program * program
   | While of expr * program
+  | Label of string
+  | Goto of string
+  | ConditionalGoto of expr * string
   | Nop
 
 type var_state =
@@ -218,10 +221,12 @@ let rec int_abs program =
         add_message "While"
         <+> eval cond
         <+> eval_alt body Nop
-    | Alternative(cond, then_body, else_body) ->
-        (add_message "Alternative"
+    | If(cond, then_body, else_body) ->
+        (add_message "If"
          <+> eval cond
          <+> eval_alt then_body else_body)
+    | ConditionalGoto(_, _) | Goto(_) | Label(_) ->
+        failwith "Internal error -> remove goto statements before running absint."
 
 and eval_alt body1 body2 =
   save_messages >>= fun current_messages ->
@@ -263,20 +268,59 @@ let run program =
   let (env, messages), _ = run_absint absint_monad ([], []) in
     (show_env env, List.rev messages);;
 
-(* Test programs *)
-let program_1 = Seq [Declare "a";
-                     Declare "b";
-                     Assignment("a", Sum(Number 1, Number 2));
-                     Alternative(LessThan(Var "a", Var "b"),
-                                 Seq [Declare "c";
-                                      Assignment ("c", Number 3);
-                                      Assignment("a", Var "c")],
-                                 Seq [Declare "d";
-                                      Assignment("a", Sum(Number 2, Var "d"))])];;
+(* An element on the GOTO removal transformation stack is the list of
+   instructions already processed (in reverse order) and the list of
+   unprocessed instructions.
 
-let program_2 = Seq [Declare "a";
-                     Declare "b";
-                     Assignment("a", Number 1);
-                     While (LessThan(Var "a", Number 5),
-                            Seq [Assignment("b", Var "a");
-                                 Assignment("a", Sum(Var "a", Number 1))])];;
+   This stack is probably kin to the zipper data structures. *)
+type transform_stack = program list * program list;;
+
+let remove_goto program =
+  let rec remove_goto_impl stack =
+    match stack with
+      | (processed, unprocessed) :: tl ->
+          (match unprocessed with
+             | to_process :: others ->
+                 (match to_process with
+                    | Seq(stmts) ->
+                        let new_stack = ([], stmts) :: (processed, others) :: tl in
+                        let transformed_stmts, transformed_tl = remove_goto_impl new_stack in
+                        let new_seq = Seq transformed_stmts in
+                        let new_top = (new_seq :: processed, others) in
+                          remove_goto_impl (new_top :: transformed_tl)
+                    | If(cond, then_body, else_body) ->
+                        let then_stack = ([], [then_body]) :: (processed, others) :: tl in
+                        let tr_then_body, tr_tl_1 = remove_goto_impl then_stack in
+                        let else_stack =
+                          ([], [else_body]) :: (processed, others) :: tr_tl_1
+                        in
+                        let tr_else_body, tr_tl_2 = remove_goto_impl else_stack in
+                        let new_if = If(cond,
+                                        List.hd tr_then_body,
+                                        List.hd tr_else_body) in
+                        let new_top = (new_if :: processed, others) in
+                          remove_goto_impl (new_top :: tr_tl_2)
+                    | While(cond, body) ->
+                        let new_stack = ([], [body]) :: (processed, others) :: tl in
+                        let tr_body, tr_tl = remove_goto_impl new_stack in
+                        let new_while = While(cond, List.hd tr_body) in
+                        let new_top = (new_while :: processed, others) in
+                          remove_goto_impl (new_top :: tr_tl)
+                    | stmt ->
+                        let new_top = (stmt :: processed, others) in
+                          remove_goto_impl (new_top :: tl))
+             | [] ->
+                 List.rev processed, tl)
+      | [] ->
+          [], []
+  in
+  let processed, final_stack = remove_goto_impl [([], [program])] in
+    List.hd processed;;
+
+let program_1 = Seq [Declare "a";
+                       Declare "b";
+                       Assignment("a", Number 1);
+                       ConditionalGoto(Equal(Var "a", Number 1), "Gogu");
+                       Assignment("b", Number 1);
+                       Label "Gogu";
+                       Assignment("a", Number 2)];;

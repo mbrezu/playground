@@ -25,21 +25,21 @@ let test_undeclared_variable () =
   let expected_messages = ["Seq"; "Assignment"; "Undeclared variable 'a'."] in
     absint_test_helper program expected_env expected_messages;;
 
-let test_alternative_1 () =
+let test_if_1 () =
   let program = Seq [Declare "a";
-                     Alternative(LessThan(Number 1, Number 2),
+                     If(LessThan(Number 1, Number 2),
                                  Assignment("a", Number 2),
                                  Nop)]
   in
   let expected_env = [["'a' -> Uninitialized"]] in
-  let expected_messages = ["Seq"; "Declare 'a'."; "Alternative"; "Nop"; "Assignment"] in
+  let expected_messages = ["Seq"; "Declare 'a'."; "If"; "Nop"; "Assignment"] in
     absint_test_helper program expected_env expected_messages;;
 
-let test_alternative_2 () =
+let test_if_2 () =
   let program = Seq [Declare "a";
                      Declare "b";
                      Assignment("a", Sum(Number 1, Number 2));
-                     Alternative(LessThan(Var "a", Var "b"),
+                     If(LessThan(Var "a", Var "b"),
                                  Seq [Declare "c";
                                       Assignment ("c", Number 3);
                                       Assignment("a", Var "c")],
@@ -52,7 +52,7 @@ let test_alternative_2 () =
                            "Declare 'a'.";
                            "Declare 'b'.";
                            "Assignment";
-                           "Alternative";
+                           "If";
                            "Uninitialized variable 'b'.";
                            "Seq";
                            "Declare 'd'.";
@@ -88,10 +88,30 @@ let test_while_1 () =
   in
     absint_test_helper program expected_env expected_messages;;
 
+let test_goto_removal_1 () =
+  let program = Seq [Declare "a";
+                     Declare "b";
+                     Assignment("a", Number 1);
+                     ConditionalGoto(Equal(Var "a", Number 1), "Gogu");
+                     Assignment("b", Number 1);
+                     Label "Gogu";
+                     Assignment("a", Number 2)]
+  in
+  let program_without_gotos = Seq [Declare "a";
+                                   Declare "b";
+                                   Assignment("a", Number 1);
+                                   If(Equal(Var "a", Number 1),
+                                               Nop,
+                                               Assignment("b", Number 1));
+                                   Assignment("a", Number 2)]
+  in
+    assert_equal program_without_gotos (remove_goto program);;
+
 let suite = "Absint tests" >::: ["test_simple_seq" >:: test_simple_seq;
                                  "test_simple_assignment" >:: test_simple_assignment;
                                  "test_undeclared_variable" >:: test_undeclared_variable;
-                                 "test_alternative_1" >:: test_alternative_1;
-                                 "test_alternative_2" >:: test_alternative_2;
+                                 "test_if_1" >:: test_if_1;
+                                 "test_if_2" >:: test_if_2;
                                  "test_while_1" >:: test_while_1;
+                                 "test_goto_removal_1" >:: test_goto_removal_1;
                                 ];;

@@ -69,13 +69,6 @@ type program =
   | While of expr * program
   | Nop
 
-let program_1 = Seq [Declare "a";
-                     Declare "b";
-                     Assignment("a", Sum(Number 1, Number 2));
-                     Alternative(LessThan(Var "a", Var "b"),
-                                 Assignment("a", Number 34),
-                                 Assignment("a", Number 2))];;
-
 type var_state =
   | Uninitialized
   | Unknown
@@ -83,52 +76,98 @@ type var_state =
 
 module VarMap = Map.Make(String);;
 
-
+type env = var_state VarMap.t list;;
 
 (* Specialization of the backtracking state monad above. *)
-let add_message message =
-  update_state (fun (var_map, messages) -> (var_map, message :: messages));;
 
+(* Environment *)
 let combine_vals expr1 expr2 =
   match (expr1, expr2) with
     | Unknown, Unknown -> Unknown
     | _ -> Uninitialized;;
 
 let absint_amb m1 m2 =
-  let combine_var_maps var_maps =
-    let combine_maps map1 map2 =
-      VarMap.fold
-        (fun key value other_map ->
-           let combined_value =
-             if VarMap.mem key other_map
-             then combine_vals value (VarMap.find key other_map)
-             else value
-           in
-             VarMap.add key combined_value other_map)
-        map1
-        map2
+  let combine_2_maps map1 map2 =
+    VarMap.fold
+      (fun key value other_map ->
+         let combined_value =
+           if VarMap.mem key other_map
+           then combine_vals value (VarMap.find key other_map)
+           else value
+         in
+           VarMap.add key combined_value other_map)
+      map1
+      map2
+  in
+  let combine_envs envs =
+    let combine_2_envs env1 env2 =
+      List.map2 combine_2_maps env1 env2
     in
-      List.fold_left combine_maps VarMap.empty var_maps
+      List.fold_left combine_2_envs (List.hd envs) (List.tl envs)
   in
   let combine_states states =
     let combine_two_states state1 state2 =
-      let var_map1, messages1 = state1 in
-      let var_map2, messages2 = state2 in
-      let var_map = combine_var_maps [var_map1; var_map2] in
+      let env1, messages1 = state1 in
+      let env2, messages2 = state2 in
+      let env = combine_envs [env1; env2] in
       let messages = messages1 @ messages2 in
-        (var_map, messages)
+        (env, messages)
     in
       List.fold_left combine_two_states (List.hd states) (List.tl states)
   in
     amb combine_states (const (Some ())) [m1; m2];;
 
-let set_vars new_vars =
-  get_state >>= fun (_, messages) ->
-    set_state (new_vars, messages);;
+let set_var var value =
+  let rec env_set_var env var value =
+    match env with
+      | var_map :: other_maps ->
+          if VarMap.mem var var_map
+          then (VarMap.add var value var_map) :: other_maps
+          else var_map :: (env_set_var other_maps var value)
+      | [] -> []
+  in
+    get_state >>= fun (env, messages) ->
+      let new_env = env_set_var env var value in
+        set_state (new_env, messages);;
 
-let get_vars =
-  get_state >>= fun (vars, _) ->
-    result vars;;
+let declare_var var =
+  get_state >>= fun (env, messages) ->
+    let new_env =
+      match env with
+        | var_map :: tl ->
+            (VarMap.add var Uninitialized var_map) :: tl
+        | [] ->
+            (VarMap.empty |> VarMap.add var Uninitialized) :: []
+    in
+      set_state (new_env, messages);;
+
+let get_var var =
+  let rec env_get_var env var =
+    match env with
+      | var_map :: other_maps ->
+          if VarMap.mem var var_map
+          then Some(VarMap.find var var_map)
+          else env_get_var other_maps var
+      | [] ->
+          None
+  in
+    get_state >>= fun (env, _) ->
+      result <| env_get_var env var;;
+
+let add_env_frame =
+  get_state >>= fun (env, messages) ->
+    set_state (VarMap.empty :: env, messages);;
+
+let remove_env_frame =
+  get_state >>= fun (env, messages) ->
+    if List.length env > 1
+    then set_state (List.tl env, messages)
+    else result ();;
+
+(* Messages *)
+
+let add_message message =
+  update_state (fun (var_map, messages) -> (var_map, message :: messages));;
 
 let save_messages =
   get_state >>= fun (var_map, messages) ->
@@ -139,47 +178,55 @@ let restore_messages messages =
   get_state >>= fun (var_map, current_messages) ->
     set_state (var_map, current_messages @ messages);;
 
-let dump_var_map vars =
-  VarMap.iter
-    (fun key value ->
-       let value_str = match value with
-         | Uninitialized -> "Uninitialized"
-         | Unknown -> "Unknown"
-       in
-         printf "'%s' -> %s\n" key value_str)
-    vars;;
+(* Debugging *)
+let show_env env =
+  let dump_var_map var_map =
+    VarMap.fold
+      (fun key value bindings ->
+         let value_str = match value with
+           | Uninitialized -> "Uninitialized"
+           | Unknown -> "Unknown"
+         in
+           (sprintf "'%s' -> %s" key value_str) :: bindings)
+      var_map
+      []
+  in
+    List.rev env |> List.map dump_var_map;;
 
+(* Abstract Interpreter *)
 let rec int_abs program =
   match program with
     | Seq statements ->
         add_message "Seq"
+        <+> add_env_frame
         <+> chain statements
+        <+> remove_env_frame
     | Assignment(var, expr) ->
         (add_message "Assignment"
-         <+> get_vars >>= fun vars ->
-           (if not (VarMap.mem var vars)
+         <+> get_var var >>= fun value ->
+           (if (value = None)
             then add_message (sprintf "Undeclared variable '%s'." var)
             else result ())
            <+> eval expr >>= fun value ->
-             let new_vars = VarMap.add var value vars in
-               set_vars new_vars)
+             set_var var value)
     | Declare var ->
-        (get_vars >>= fun vars ->
-           let new_vars = VarMap.add var Uninitialized vars in
-             set_vars new_vars
-             <+> add_message (sprintf "Declare '%s'." var))
+        add_message <| sprintf "Declare '%s'." var
+          <+> declare_var var
     | Nop ->
         add_message "Nop"
     | While(cond, body) ->
         add_message "While"
         <+> eval cond
-        <+> int_abs body
+        <+> eval_alt body Nop
     | Alternative(cond, then_body, else_body) ->
         (add_message "Alternative"
          <+> eval cond
-         <+> save_messages >>= fun current_messages ->
-           (absint_amb (int_abs then_body) (int_abs else_body))
-           <+> restore_messages current_messages)
+         <+> eval_alt then_body else_body)
+
+and eval_alt body1 body2 =
+  save_messages >>= fun current_messages ->
+    absint_amb (int_abs body1) (int_abs body2)
+    <+> restore_messages current_messages
 
 and eval expr =
   match expr with
@@ -191,29 +238,45 @@ and eval expr =
            eval expr2 >>= fun val2 ->
              result (combine_vals val1 val2))
     | Var var ->
-        get_vars >>= fun vars ->
-          if not (VarMap.mem var vars)
-          then
-            add_message (sprintf "Undeclared variable '%s'." var)
-            <+> result Uninitialized
-          else
-            let variable_state = VarMap.find var vars in
-              match variable_state with
-                | Uninitialized ->
-                    add_message (sprintf "Uninitialized variable '%s'." var)
-                    <+> result Uninitialized
-                | Unknown ->
-                    result Unknown
+        get_var var >>= fun maybe_value ->
+          match maybe_value with
+            | Some value ->
+                (match value with
+                   | Uninitialized ->
+                       add_message (sprintf "Uninitialized variable '%s'." var)
+                       <+> result Uninitialized
+                   | Unknown ->
+                       result Unknown)
+            | None ->
+                add_message (sprintf "Undeclared variable '%s'." var)
+                <+> result Uninitialized
 
 and chain statements =
   match statements with
     | hd :: tl ->
         int_abs hd <+> (chain tl)
     | [] ->
-        result ()
+        result ();;
 
 let run program =
   let absint_monad = int_abs program in
-  let (vars, messages), _ = run_absint absint_monad (VarMap.empty, []) in
-    dump_var_map vars;
-    List.rev messages;;
+  let (env, messages), _ = run_absint absint_monad ([], []) in
+    (show_env env, List.rev messages);;
+
+(* Test programs *)
+let program_1 = Seq [Declare "a";
+                     Declare "b";
+                     Assignment("a", Sum(Number 1, Number 2));
+                     Alternative(LessThan(Var "a", Var "b"),
+                                 Seq [Declare "c";
+                                      Assignment ("c", Number 3);
+                                      Assignment("a", Var "c")],
+                                 Seq [Declare "d";
+                                      Assignment("a", Sum(Number 2, Var "d"))])];;
+
+let program_2 = Seq [Declare "a";
+                     Declare "b";
+                     Assignment("a", Number 1);
+                     While (LessThan(Var "a", Number 5),
+                            Seq [Assignment("b", Var "a");
+                                 Assignment("a", Sum(Var "a", Number 1))])];;

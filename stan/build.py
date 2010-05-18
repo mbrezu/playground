@@ -18,7 +18,8 @@ base_modules = ["parserTypes",
                 "pwm",
                 "lexer",
                 "plsqlParser",
-                "absint"
+                "absint",
+                "absint2"
                 ]
 
 tests_modules = ["testsCommon",

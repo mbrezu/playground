@@ -88,30 +88,10 @@ let test_while_1 () =
   in
     absint_test_helper program expected_env expected_messages;;
 
-let test_goto_removal_1 () =
-  let program = Seq [Declare "a";
-                     Declare "b";
-                     Assignment("a", Number 1);
-                     ConditionalGoto(Equal(Var "a", Number 1), "Gogu");
-                     Assignment("b", Number 1);
-                     Label "Gogu";
-                     Assignment("a", Number 2)]
-  in
-  let program_without_gotos = Seq [Declare "a";
-                                   Declare "b";
-                                   Assignment("a", Number 1);
-                                   If(Equal(Var "a", Number 1),
-                                               Nop,
-                                               Assignment("b", Number 1));
-                                   Assignment("a", Number 2)]
-  in
-    assert_equal program_without_gotos (remove_goto program);;
-
 let suite = "Absint tests" >::: ["test_simple_seq" >:: test_simple_seq;
                                  "test_simple_assignment" >:: test_simple_assignment;
                                  "test_undeclared_variable" >:: test_undeclared_variable;
                                  "test_if_1" >:: test_if_1;
                                  "test_if_2" >:: test_if_2;
                                  "test_while_1" >:: test_while_1;
-                                 "test_goto_removal_1" >:: test_goto_removal_1;
                                 ];;

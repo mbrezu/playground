@@ -236,17 +236,19 @@ let add_prev_next block_map label_map =
   functions.
 
 *)
-type 'state absint_pass = { state_combine: 'state option list -> 'state option;
-                            state_converges: 'state option -> 'state option -> bool;
-                            state_update: 'state option -> ir -> 'state option;
+type 'state absint_pass = { empty_state: 'state;
+                            state_update: 'state -> ir -> 'state;
+                            state_converges: 'state -> 'state -> bool;
+                            state_combine: 'state list -> 'state;
+                            state_combine_final: 'state list -> 'state;
                           };;
 
-type 'state block_state = int * 'state option;;
+type 'state block_state = int * 'state;;
 
-let block_sort blocks pass max_iterations_per_block =
+let absint_core blocks pass max_iterations_per_block =
   let blocks_state =
     List.fold_left
-      (fun map block -> StringMap.add block.name (0, None) map)
+      (fun map block -> StringMap.add block.name (0, pass.empty_state) map)
       StringMap.empty
       blocks
   in
@@ -255,7 +257,7 @@ let block_sort blocks pass max_iterations_per_block =
   let final_blocks = List.filter (fun block -> block.next_blocks = []) blocks in
   let add_end elms list = (elms @ (List.rev list)) |> List.rev in
   let extract_state (count, state) = state in
-  let rec bs_iter queue blocks_state =
+  let rec ac_iter queue blocks_state =
     match queue with
       | [] ->
           let final_blocks_states =
@@ -263,16 +265,24 @@ let block_sort blocks pass max_iterations_per_block =
               (fun block -> StringMap.find block.name blocks_state |> extract_state)
               final_blocks
           in
-            pass.state_combine final_blocks_states
+            pass.state_combine_final final_blocks_states
       | hd :: tl ->
-          let count, old_state = StringMap.find hd.name blocks_state in
-          let new_state = List.fold_left pass.state_update old_state hd.instructions in
+          let count, old_final_state = StringMap.find hd.name blocks_state in
+            print_endline "***";
+            List.iter (fun bn -> printf "%s\n" bn) hd.prev_blocks;
+          let parent_blocks_states =
+            List.map (fun name -> StringMap.find name blocks_state |> snd) hd.prev_blocks
+          in
+          let start_state = pass.state_combine parent_blocks_states in
+          let new_final_state =
+            List.fold_left pass.state_update start_state hd.instructions
+          in
           let process_children =
             count < max_iterations_per_block
-            && not(pass.state_converges old_state new_state)
+            && not(pass.state_converges old_final_state new_final_state)
           in
           let new_blocks_state =
-            StringMap.add hd.name (count + 1, new_state) blocks_state
+            StringMap.add hd.name (count + 1, new_final_state) blocks_state
           in
             if process_children
             then
@@ -280,16 +290,19 @@ let block_sort blocks pass max_iterations_per_block =
                 List.map (fun name -> StringMap.find name blocks_map) hd.next_blocks
               in
               let new_queue = add_end children_blocks tl in
-                bs_iter new_queue new_blocks_state
+                ac_iter new_queue new_blocks_state
             else
-              bs_iter tl new_blocks_state
+              ac_iter tl new_blocks_state
   in
-    bs_iter first_blocks blocks_state;;
+    ac_iter first_blocks blocks_state;;
 
 (* Undefined variable pass. *)
+
+(* This pass assumes that all blocks that precede a block have the
+   same environment depth at their end (state combiner assumption). *)
 type var_value =
   | Uninitialized
-  | Unknown
+  | Initialized
 
 type env = var_value StringMap.t list;;
 
@@ -299,42 +312,175 @@ type state = env * string StringMap.t;;
 
 let combine_vals expr1 expr2 =
   match (expr1, expr2) with
-    | Unknown, Unknown -> Unknown
+    | Initialized, Initialized -> Initialized
     | _ -> Uninitialized;;
 
 let rec eval expr env =
-  let rec env_get_var env var =
+  let rec env_get_var var env =
     match env with
       | var_map :: other_maps ->
           if StringMap.mem var var_map
           then Some(StringMap.find var var_map)
-          else env_get_var other_maps var
+          else env_get_var var other_maps
       | [] ->
           None
   in
-  match expr with
-    | Number _ -> Unknown
-    | Add(expr1, expr2)
-    | Subtract(expr1, expr2)
-    | Mod(expr1, expr2)
-    | Multiply(expr1, expr2)
-    | Divide(expr1, expr2)
-    | LessThan(expr1, expr2)
-    | GreaterThan(expr1, expr2)
-    | Equal(expr1, expr2)  ->
-        combine_vals (eval expr1 env) (eval expr2 env)
-    | Not(expr) ->
-        eval expr env
-    | Var var ->
-        match env_get_var env var with
-          | None -> Uninitialized
-          | Some _ -> Unknown;;
+    match expr with
+      | Number _ -> Initialized
+      | Add(expr1, expr2)
+      | Subtract(expr1, expr2)
+      | Mod(expr1, expr2)
+      | Multiply(expr1, expr2)
+      | Divide(expr1, expr2)
+      | LessThan(expr1, expr2)
+      | GreaterThan(expr1, expr2)
+      | Equal(expr1, expr2)  ->
+          combine_vals (eval expr1 env) (eval expr2 env)
+      | Not(expr) ->
+          eval expr env
+      | Var var ->
+          match env_get_var var env with
+            | None -> Uninitialized
+            | Some _ -> Initialized;;
+
+let add_env_frame env = StringMap.empty :: env;;
+
+let remove_env_frame env = List.tl env;;
+
+let rec env_set_var var value env =
+  match env with
+    | var_map :: other_maps ->
+        if StringMap.mem var var_map
+        then (StringMap.add var value var_map) :: other_maps
+        else var_map :: (env_set_var var value other_maps )
+    | [] -> [];;
+
+let declare_var var env =
+  match env with
+    | var_map :: tl ->
+        (StringMap.add var Uninitialized var_map) :: tl
+    | [] ->
+        (StringMap.empty |> StringMap.add var Uninitialized) :: [];;
+
+let vi_pass_empty_state = ([], StringSet.empty);;
+
+let vi_pass_state_update state insn =
+  let env, messages = state in
+    match insn with
+      | NewFrame ->
+          (add_env_frame env, messages)
+      | KillFrame ->
+          (remove_env_frame env, messages)
+
+      (* We don't need to do anything on GOTOs, since the code has
+         already been 'blockified'. *)
+      | Goto (_)
+      | GotoIf (_, _, _) ->
+          state
+
+      (* No need to act on labels either. In fact, GOTOs and Labels
+         could be removed when 'blockifying' the IR, to speed things
+         up. *)
+      | Label (_) ->
+          state
+
+      | Assignment(var, expr) ->
+          (let value = eval expr env in
+           let new_messages =
+             match value with
+               | Uninitialized ->
+                   let message =
+                     sprintf "The value assigned to variable '%s' is uninitialized" var in
+                     StringSet.add message messages
+               | _ ->
+                   messages
+           in
+             (env_set_var var value env, new_messages))
+
+      | Declare(var) ->
+          (declare_var var env, messages)
+
+      (* A set of outputs should be added to the state? *)
+      | Output (_) ->
+          state;;
+
+let vi_pass_state_converges old_state new_state =
+  let old_env, _ = old_state in
+  let new_env, _ = new_state in
+    old_env = new_env;;
+
+let vi_pass_state_combine_final states =
+  let combine_messages messages =
+    List.fold_left (fun m1 m2 -> StringSet.union m1 m2) StringSet.empty messages
+  in
+  let final_messages = List.map snd states |> combine_messages in
+    ([], final_messages);;
+
+(* Currently this fails, because we should filter out states of blocks
+   which have not been ran yet.
+
+   I should probably filter out pass.empty_states from the list of
+   states (making the stored state an option sounds reasonable too,
+   but makes code more complicated, probably needlessly).
+
+   I should also move this function to the absint core, and
+   parameterize by `combine_vals`, i.e. `pass.state_combine` will be
+   removed and `pass.combine_values` added. *)
+let vi_pass_state_combine states =
+  let combine_2_maps map1 map2 =
+    StringMap.fold
+      (fun key value other_map ->
+         let combined_value =
+           if StringMap.mem key other_map
+           then combine_vals value (StringMap.find key other_map)
+           else value
+         in
+           StringMap.add key combined_value other_map)
+      map1
+      map2
+  in
+  let combine_envs envs =
+    let combine_2_envs env1 env2 =
+      List.map2 combine_2_maps env1 env2
+    in
+      List.fold_left combine_2_envs (List.hd envs) (List.tl envs)
+  in
+  let combine_two_states state1 state2 =
+    let env1, messages1 = state1 in
+    let env2, messages2 = state2 in
+      printf "%d %d\n" (List.length env1) (List.length env2);
+      if List.length env1 <> List.length env2
+      then failwith "ABSINT: VI pass: environments not the same size";
+      let env = combine_envs [env1; env2] in
+      let messages = StringSet.union messages1 messages2 in
+        (env, messages)
+  in
+    match states with
+      | [] -> vi_pass_empty_state
+      | hd :: tl ->
+          List.fold_left combine_two_states hd tl;;
+
+let vi_pass = { empty_state = vi_pass_empty_state;
+                state_update = vi_pass_state_update;
+                state_converges = vi_pass_state_converges;
+                state_combine = vi_pass_state_combine;
+                state_combine_final = vi_pass_state_combine_final;
+              };;
 
 let process ir_list =
+  reset_gensym ();
   let blocks = ir_list |> process_goto_if |> split_into_blocks in
   let block_map, label_map = make_block_maps blocks in
   let block_map = add_prev_next block_map label_map in
-  let block_list = StringMap.fold (fun _ block list -> block :: list) block_map []
-                          |> List.rev
+  let block_list =
+    StringMap.fold (fun _ block list -> block :: list) block_map [] |> List.rev
   in
-    block_list;;
+    absint_core block_list vi_pass 5;;
+
+let process2 ir_list =
+  reset_gensym ();
+  let blocks = ir_list |> process_goto_if |> split_into_blocks in
+  let block_map, label_map = make_block_maps blocks in
+  let block_map = add_prev_next block_map label_map in
+    StringMap.fold (fun _ block list -> block :: list) block_map [] |> List.rev;;
+

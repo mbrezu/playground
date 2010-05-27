@@ -125,8 +125,6 @@ let split_into_blocks ir_list =
   in
     split_into_blocks_iter ir_list [] [];;
 
-(* let topo_sort_blocks block_map = None;; *)
-
 let process_goto_if ir_list =
   let rec pgi_iter ir_list =
     match ir_list with
@@ -256,6 +254,7 @@ let absint_core blocks pass max_iterations_per_block =
           in
             pass.state_combine_final final_blocks_states
       | hd :: tl ->
+          (* printf "Block: %s\n" hd.name; *)
           let count, old_final_state = StringMap.find hd.name blocks_state in
           let raw_parent_blocks_states =
             List.map (fun name -> StringMap.find name blocks_state |> snd) hd.prev_blocks
@@ -331,9 +330,9 @@ let rec env_get_var var env =
     | [] ->
         None;;
 
-let rec eval expr env =
+let rec eval expr env messages =
   match expr with
-    | Number _ -> Initialized
+    | Number _ -> Initialized, messages
     | Add(expr1, expr2)
     | Subtract(expr1, expr2)
     | Mod(expr1, expr2)
@@ -342,13 +341,24 @@ let rec eval expr env =
     | LessThan(expr1, expr2)
     | GreaterThan(expr1, expr2)
     | Equal(expr1, expr2) ->
-        combine_vals (eval expr1 env) (eval expr2 env)
+        let val1, mess1 = eval expr1 env StringSet.empty in
+        let val2, mess2 = eval expr2 env StringSet.empty in
+        let new_messages = StringSet.union mess1 mess2 |> StringSet.union messages in
+          (combine_vals val1 val2, new_messages)
     | Not(expr) ->
-        eval expr env
+        eval expr env messages
     | Var var ->
         match env_get_var var env with
-          | None -> Uninitialized
-          | Some v -> v;;
+          | None ->
+              let message = sprintf "Variable '%s' is not declared." var in
+                (Uninitialized, StringSet.add message messages)
+          | Some v ->
+              (match v with
+                 | Uninitialized ->
+                     let message = sprintf "Variable '%s' is not initialized." var in
+                       (Uninitialized, StringSet.add message messages)
+                 | Initialized ->
+                     (Initialized, messages))
 
 (* Debugging *)
 let listify_env env =
@@ -367,8 +377,8 @@ let listify_env env =
 
 let show_env env =
   listify_env env
-    |> List.concat
-    |> List.fold_left (fun str elm -> str ^ "\n" ^ elm) "";;
+          |> List.concat
+          |> List.fold_left (fun str elm -> str ^ "\n" ^ elm) "";;
 
 let show_state state =
   let env, messages = state in
@@ -389,9 +399,14 @@ let vi_pass_state_update state insn =
 
       (* We don't need to do anything on GOTOs, since the code has
          already been 'blockified'. *)
-      | Goto (_)
-      | GotoIf (_, _, _) ->
+      | Goto (_) ->
           state
+
+      (* We evaluate the condition in `GotoIf`, to trigger
+         warnings early. *)
+      | GotoIf (cond, _, _) ->
+          let _, new_messages = eval cond env messages in
+            (env, new_messages)
 
       (* No need to act on labels either. In fact, GOTOs and Labels
          could be removed when 'blockifying' the IR, to speed things
@@ -400,21 +415,12 @@ let vi_pass_state_update state insn =
           state
 
       | Assignment(var, expr) ->
-          (let value = eval expr env in
-           let new_messages =
-             match value with
-               | Uninitialized ->
-                   let message =
-                     sprintf "The value assigned to variable '%s' is uninitialized." var in
-                     StringSet.add message messages
-               | _ ->
-                   messages
-           in
+          (let value, new_messages = eval expr env messages in
            let new_messages2 =
              match env_get_var var env with
                | Some _ -> new_messages
                | None ->
-                   let message = sprintf "The variable '%s' is not declared." var in
+                   let message = sprintf "Variable '%s' is not declared." var in
                      StringSet.add message new_messages
            in
              (env_set_var var value env, new_messages2))
@@ -434,8 +440,8 @@ let vi_pass_state_combine_final states =
     List.fold_left (fun m1 m2 -> StringSet.union m1 m2) StringSet.empty messages
   in
     (* List.map show_state states |> String.concat "\n" |> print_endline; *)
-    let final_messages = List.map snd states |> combine_messages in
-      ([], final_messages);;
+  let final_messages = List.map snd states |> combine_messages in
+    ([], final_messages);;
 
 (* Currently this fails, because we should filter out states of blocks
    which have not been ran yet.
@@ -471,10 +477,14 @@ let vi_pass_state_combine states =
       let messages = StringSet.union messages1 messages2 in
         (env, messages)
   in
+  let result =
     match states with
       | [] -> vi_pass_empty_state
       | hd :: tl ->
-          List.fold_left combine_two_states hd tl;;
+          List.fold_left combine_two_states hd tl
+  in
+    (* show_state result |> print_endline; *)
+    result;;
 
 let vi_pass = { empty_state = vi_pass_empty_state;
                 state_update = vi_pass_state_update;
@@ -518,7 +528,7 @@ let example_1 = [ NewFrame;
                 ];;
 
 let example_2 = [ NewFrame;
-                  (* Declare "N"; *)
+                  Declare "N";
                   (* Assignment("N", Number 137); *)
                   Label "While";
                   GotoIf(Not(GreaterThan(Var "N", Number 1)), "AfterWhile", "");
@@ -532,3 +542,13 @@ let example_2 = [ NewFrame;
                   Label("AfterWhile");
                   KillFrame;
                 ];;
+
+(* TODO: the messages should be part of the global absint state, not
+   block state.
+   
+   The env should be the only block state for the 'vi' (variable
+   initialized) pass (and possibly for other passes).
+
+   The update_state callback should receive a 'messages' set it should
+   return (enriched with new messages if necessary).
+*)

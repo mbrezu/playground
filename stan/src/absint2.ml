@@ -25,21 +25,7 @@ type ir =
   | Declare of string
   | Output of string;;
 
-let example_1 = [ NewFrame;
-                  Declare "N";
-                  Assignment("N", Number 137);
-                  Label "While";
-                  GotoIf(Not(GreaterThan(Var "N", Number 1)), "AfterWhile", "");
-                  GotoIf(Equal(Mod(Var"N", Number 2), Number 0), "ElseBranch", "");
-                  Assignment("N", Divide(Var "N", Number 2));
-                  Goto("AfterIf");
-                  Label("ElseBranch");
-                  Assignment("N", Add(Multiply(Number 3, Var "N"), Number 1));
-                  Label("AfterIf");
-                  Goto("While");
-                  Label("AfterWhile");
-                  KillFrame;
-                ];;
+module StringSet = Set.Make(String);;
 
 module StringMap = Map.Make(String);;
 
@@ -260,19 +246,24 @@ let absint_core blocks pass max_iterations_per_block =
   let rec ac_iter queue blocks_state =
     match queue with
       | [] ->
-          let final_blocks_states =
+          let raw_final_blocks_states =
             List.map
               (fun block -> StringMap.find block.name blocks_state |> extract_state)
               final_blocks
           in
+          let final_blocks_states =
+            List.filter (fun st -> st <> pass.empty_state) raw_final_blocks_states
+          in
             pass.state_combine_final final_blocks_states
       | hd :: tl ->
           let count, old_final_state = StringMap.find hd.name blocks_state in
-            print_endline "***";
-            List.iter (fun bn -> printf "%s\n" bn) hd.prev_blocks;
-          let parent_blocks_states =
+            (* print_endline "***"; *)
+            (* List.iter (fun bn -> printf "%s\n" bn) hd.prev_blocks; *)
+          let raw_parent_blocks_states =
             List.map (fun name -> StringMap.find name blocks_state |> snd) hd.prev_blocks
           in
+          let parent_blocks_states =
+            List.filter (fun st -> st <> pass.empty_state) raw_parent_blocks_states in
           let start_state = pass.state_combine parent_blocks_states in
           let new_final_state =
             List.fold_left pass.state_update start_state hd.instructions
@@ -306,8 +297,6 @@ type var_value =
 
 type env = var_value StringMap.t list;;
 
-module StringSet = Set.Make(String);;
-
 type state = env * string StringMap.t;;
 
 let combine_vals expr1 expr2 =
@@ -334,14 +323,14 @@ let rec eval expr env =
       | Divide(expr1, expr2)
       | LessThan(expr1, expr2)
       | GreaterThan(expr1, expr2)
-      | Equal(expr1, expr2)  ->
+      | Equal(expr1, expr2) ->
           combine_vals (eval expr1 env) (eval expr2 env)
       | Not(expr) ->
           eval expr env
       | Var var ->
           match env_get_var var env with
             | None -> Uninitialized
-            | Some _ -> Initialized;;
+            | Some v -> v;;
 
 let add_env_frame env = StringMap.empty :: env;;
 
@@ -352,7 +341,7 @@ let rec env_set_var var value env =
     | var_map :: other_maps ->
         if StringMap.mem var var_map
         then (StringMap.add var value var_map) :: other_maps
-        else var_map :: (env_set_var var value other_maps )
+        else var_map :: (env_set_var var value other_maps)
     | [] -> [];;
 
 let declare_var var env =
@@ -361,6 +350,27 @@ let declare_var var env =
         (StringMap.add var Uninitialized var_map) :: tl
     | [] ->
         (StringMap.empty |> StringMap.add var Uninitialized) :: [];;
+
+(* Debugging *)
+let show_env env =
+  let dump_var_map var_map =
+    StringMap.fold
+      (fun key value bindings ->
+         let value_str = match value with
+           | Uninitialized -> "Uninitialized"
+           | Initialized -> "Initialized"
+         in
+           (sprintf "'%s' -> %s" key value_str) :: bindings)
+      var_map
+      []
+  in
+    List.rev env |> List.map dump_var_map;;
+
+let dump_env env =
+  show_env env
+    |> List.concat
+    |> List.fold_left (fun str elm -> str ^ "\n" ^ elm) ""
+    |> print_endline;;
 
 let vi_pass_empty_state = ([], StringSet.empty);;
 
@@ -390,7 +400,7 @@ let vi_pass_state_update state insn =
              match value with
                | Uninitialized ->
                    let message =
-                     sprintf "The value assigned to variable '%s' is uninitialized" var in
+                     sprintf "The value assigned to variable '%s' is uninitialized." var in
                      StringSet.add message messages
                | _ ->
                    messages
@@ -407,7 +417,7 @@ let vi_pass_state_update state insn =
 let vi_pass_state_converges old_state new_state =
   let old_env, _ = old_state in
   let new_env, _ = new_state in
-    old_env = new_env;;
+    old_state = new_state;;
 
 let vi_pass_state_combine_final states =
   let combine_messages messages =
@@ -427,6 +437,10 @@ let vi_pass_state_combine_final states =
    parameterize by `combine_vals`, i.e. `pass.state_combine` will be
    removed and `pass.combine_values` added. *)
 let vi_pass_state_combine states =
+  (* printf "%d\n" (List.length states); *)
+  (* let set_to_str set = StringSet.elements set |> String.concat "\n" in *)
+    (* List.map snd states *)
+    (*   |> List.iter (fun set -> set_to_str set |> print_endline; print_endline ""); *)
   let combine_2_maps map1 map2 =
     StringMap.fold
       (fun key value other_map ->
@@ -439,20 +453,17 @@ let vi_pass_state_combine states =
       map1
       map2
   in
-  let combine_envs envs =
-    let combine_2_envs env1 env2 =
-      List.map2 combine_2_maps env1 env2
-    in
-      List.fold_left combine_2_envs (List.hd envs) (List.tl envs)
-  in
+  let combine_2_envs env1 env2 = List.map2 combine_2_maps env1 env2 in
   let combine_two_states state1 state2 =
     let env1, messages1 = state1 in
     let env2, messages2 = state2 in
-      printf "%d %d\n" (List.length env1) (List.length env2);
+      (* printf "%d %d\n" (List.length env1) (List.length env2); *)
       if List.length env1 <> List.length env2
       then failwith "ABSINT: VI pass: environments not the same size";
-      let env = combine_envs [env1; env2] in
+      let env = combine_2_envs env1 env2 in
       let messages = StringSet.union messages1 messages2 in
+        (* print_endline "combine states"; *)
+        (* set_to_str messages |> print_endline; *)
         (env, messages)
   in
     match states with
@@ -475,7 +486,8 @@ let process ir_list =
   let block_list =
     StringMap.fold (fun _ block list -> block :: list) block_map [] |> List.rev
   in
-    absint_core block_list vi_pass 5;;
+  let env, messages = absint_core block_list vi_pass 5 in
+    StringSet.elements messages;;
 
 let process2 ir_list =
   reset_gensym ();
@@ -484,3 +496,34 @@ let process2 ir_list =
   let block_map = add_prev_next block_map label_map in
     StringMap.fold (fun _ block list -> block :: list) block_map [] |> List.rev;;
 
+let example_1 = [ NewFrame;
+                  Declare "N";
+                  Assignment("N", Number 137);
+                  Label "While";
+                  GotoIf(Not(GreaterThan(Var "N", Number 1)), "AfterWhile", "");
+                  GotoIf(Equal(Mod(Var"N", Number 2), Number 0), "ElseBranch", "");
+                  Assignment("N", Divide(Var "N", Number 2));
+                  Goto("AfterIf");
+                  Label("ElseBranch");
+                  Assignment("N", Add(Multiply(Number 3, Var "N"), Number 1));
+                  Label("AfterIf");
+                  Goto("While");
+                  Label("AfterWhile");
+                  KillFrame;
+                ];;
+
+let example_2 = [ NewFrame;
+                  Declare "N";
+                  (* Assignment("N", Number 137); *)
+                  Label "While";
+                  GotoIf(Not(GreaterThan(Var "N", Number 1)), "AfterWhile", "");
+                  GotoIf(Equal(Mod(Var"N", Number 2), Number 0), "ElseBranch", "");
+                  Assignment("N", Divide(Var "N", Number 2));
+                  Goto("AfterIf");
+                  Label("ElseBranch");
+                  Assignment("N", Add(Multiply(Number 3, Var "N"), Number 1));
+                  Label("AfterIf");
+                  Goto("While");
+                  Label("AfterWhile");
+                  KillFrame;
+                ];;

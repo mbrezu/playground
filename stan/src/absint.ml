@@ -1,326 +1,536 @@
 
-(* ABSINT is short for 'Abstract Interpreter'.
-
-   This file contains some experiments with a state monad enriched
-   with backtracking support. I plan to use it to write the STAN
-   abstract interpreter. The simple version below contains an abstract
-   interpreter for a language with integer variables, assignment,
-   looping and alternatives (if statement).
-
-   Nested scopes and GOTO mean that the version for Plsql version will
-   be more complicated.
-
-*)
-
 open Utils;;
 open Printf;;
-(* open PlsqlParser.Ast;; *)
 
-type ('a, 'b) absint_monad = AbsintM of ('a -> 'a * 'b option)
+module Types = struct
+  type expr =
+    | Number of int
+    | Add of expr * expr
+    | Subtract of expr * expr
+    | Mod of expr * expr
+    | Divide of expr * expr
+    | Multiply of expr * expr
+    | Not of expr
+    | Var of string
+    | LessThan of expr * expr
+    | GreaterThan of expr * expr
+    | Equal of expr * expr;;
 
-let run_absint (AbsintM(f)) state = f state;;
+  type ir =
+    | NewFrame
+    | KillFrame
+    | Goto of string
+    | GotoIf of expr * string * string
+    | Label of string
+    | Assignment of string * expr
+    | Declare of string
+    | Output of string;;
 
-let bind m f = AbsintM(fun state ->
-                         let new_state, maybe_result = run_absint m state in
-                           match maybe_result with
-                             | Some k ->
-                                 let new_absint = f k in
-                                   run_absint new_absint new_state
-                             | None ->
-                                 new_state, None);;
+  type block = { name: string;
+                 labels: string list;
+                 instructions: ir list;
+                 next_blocks: string list;
+                 prev_blocks: string list;
+               };;
 
-let (>>=) m f = bind m f;;
+  type 'state absint_pass = { empty_state: 'state;
+                              state_update:
+                                'state * StringSet.t -> ir -> 'state * StringSet.t;
+                              state_converges: 'state -> 'state -> bool;
+                              state_combine: 'state list -> 'state;
+                              state_combine_final: 'state list -> 'state;
+                            };;
 
-let (<+>) m1 m2 = m1 >>= fun _ -> m2;;
+  type 'state block_state = int * 'state;;
 
-let result k = AbsintM(fun state -> state, Some k);;
+end;;
 
-let error = AbsintM(fun state -> state, None);;
+open Types;;
 
-let get_state = AbsintM(fun state -> state, Some state);;
+module Blockifier : sig
 
-let set_state new_state = AbsintM(fun state -> new_state, Some ());;
+  val blockify: ir list -> block list;;
 
-let update_state f =
-  get_state >>= fun state ->
-    set_state (f state);;
+end = struct
 
-let amb state_combiner result_combiner ms =
-  AbsintM(fun state ->
-            let states_results = List.map (fun m -> run_absint m state) ms in
-            let states = List.map fst states_results in
-            let results = List.map snd states_results in
-            let new_state = state_combiner states in
-            let result = result_combiner results in
-              (new_state, result));;
+  let gensym_counter = ref 0;;
 
-type expr =
-  | Number of int
-  | Sum of expr * expr
-  | Var of string
-  | LessThan of expr * expr
-  | Equal of expr * expr
+  let gensym prefix =
+    gensym_counter := !gensym_counter + 1;
+    sprintf "%s_%d" prefix !gensym_counter;;
 
-type program =
-  | Seq of program list
-  | Declare of string
-  | Assignment of string * expr
-  | If of expr * program * program
-  | While of expr * program
-  | Label of string
-  | Goto of string
-  | ConditionalGoto of expr * string
-  | Nop
+  let reset_gensym () =
+    gensym_counter := 0;;
 
-type var_state =
-  | Uninitialized
-  | Unknown
-      (* | Value of int *)
+  let split_while pred list =
+    let rec split_while_iter pred list acc =
+      match list with
+        | [] ->
+            (List.rev acc, [])
+        | hd :: tl ->
+            if pred hd
+            then split_while_iter pred tl (hd :: acc)
+            else (List.rev acc, list)
+    in
+      split_while_iter pred list [];;
 
-module VarMap = Map.Make(String);;
+  (* The block splitting pass should be preceded by another pass that
+     verifies that:
 
-type env = var_state VarMap.t list;;
+     1. No labels are defined twice.
 
-(* Specialization of the backtracking state monad above. *)
+     2. All labels that are not used in gotos are removed.
 
-(* Environment *)
-let combine_vals expr1 expr2 =
-  match (expr1, expr2) with
-    | Unknown, Unknown -> Unknown
-    | _ -> Uninitialized;;
+     3. `process_goto_if` has been called on this ir_list.
 
-let absint_amb m1 m2 =
-  let combine_2_maps map1 map2 =
-    VarMap.fold
-      (fun key value other_map ->
-         let combined_value =
-           if VarMap.mem key other_map
-           then combine_vals value (VarMap.find key other_map)
-           else value
-         in
-           VarMap.add key combined_value other_map)
-      map1
-      map2
-  in
-  let combine_envs envs =
+  *)
+
+  let split_into_blocks ir_list =
+    let make_block irs =
+      let prefix =
+        match irs with
+          | Label(label) :: _ -> label
+          | _ -> "Block"
+      in
+      let labels =
+        let starting_labels, _ =
+          split_while (function Label(_) -> true | _ -> false) irs
+        in
+          starting_labels
+          |> List.map (function Label(label) -> [label] | _ -> [])
+          |> List.concat
+      in
+        { name = gensym prefix;
+          labels = labels;
+          instructions = irs;
+          next_blocks = [];
+          prev_blocks = [] }
+    in
+    let add_block current_block blocks =
+      if current_block = []
+      then blocks
+      else (current_block |> List.rev |> make_block) :: blocks
+    in
+    let rec split_into_blocks_iter ir_list current_block blocks =
+      match ir_list with
+        | [] ->
+            add_block current_block blocks |> List.rev
+        | Label lbl :: _ ->
+            let maybe_add_goto current_block lbl =
+              match current_block with
+                | Goto(_) :: tl ->
+                    current_block
+                | GotoIf(_, _, _) :: tl ->
+                    current_block
+                | [] -> []
+                | _ ->
+                    Goto(lbl) :: current_block
+            in
+            let new_current_block = maybe_add_goto current_block lbl in
+            let new_blocks = add_block new_current_block blocks in
+            let labels, rest =
+              split_while (function | Label _ -> true | _ -> false) ir_list
+            in
+              split_into_blocks_iter rest (List.rev labels) new_blocks
+        | (GotoIf(_, _, _) as hd) :: tl
+        | (Goto(_) as hd) :: tl ->
+            let full_block = hd :: current_block in
+            let new_blocks = add_block full_block blocks in
+              split_into_blocks_iter tl [] new_blocks
+        | hd :: tl ->
+            split_into_blocks_iter tl (hd :: current_block) blocks
+    in
+      split_into_blocks_iter ir_list [] [];;
+
+  let process_goto_if ir_list =
+    let rec pgi_iter ir_list =
+      match ir_list with
+        | [] -> []
+        | GotoIf(cond, dest, _) :: tl ->
+            let label = gensym "Pgi"in
+              GotoIf(cond, dest, label) :: Label(label) :: (pgi_iter tl)
+        | hd :: tl ->
+            hd :: (pgi_iter tl)
+    in
+      pgi_iter ir_list;;
+
+  let rebuild_ir blocks =
+    blocks
+    |> List.map (fun block -> block.instructions)
+    |> List.concat;;
+
+  let make_block_maps blocks =
+    let name_list = List.map (fun block -> (block.name, block)) blocks in
+    let block_map = map_of_list name_list in
+    let label_list =
+      List.map (fun block -> List.map (fun label -> (label, block)) block.labels) blocks
+    |> List.concat
+    in
+    let label_map = map_of_list label_list in
+      (block_map, label_map);;
+
+  let add_prev_next block_map label_map =
+    let next_blocks_links block =
+      let last_insn = block.instructions |> List.rev |> List.hd in
+        match last_insn with
+          | Goto(lbl) ->
+              [block.name, (StringMap.find lbl label_map).name]
+          | GotoIf(_, lbl1, lbl2) ->
+              [block.name, (StringMap.find lbl1 label_map).name;
+               block.name, (StringMap.find lbl2 label_map).name]
+          | _ ->
+              []
+    in
+    let from_to_links =
+      StringMap.fold (fun block_name block from_to_links ->
+                        let new_links = next_blocks_links block in
+                          new_links @ from_to_links) block_map []
+    in
+    let next_blocks block =
+      List.filter (fun (fst, _) -> fst = block.name) from_to_links
+    |> List.map (fun (_, next) -> next)
+    in
+    let prev_blocks block =
+      List.filter (fun (_, snd) -> snd = block.name) from_to_links
+    |> List.map (fun (prev, _) -> prev)
+    in
+      StringMap.map (fun block -> { block with
+                                      next_blocks = next_blocks block;
+                                      prev_blocks = prev_blocks block }) block_map;;
+
+  let blockify ir_list =
+    reset_gensym ();
+    let blocks = ir_list |> process_goto_if |> split_into_blocks in
+    let block_map, label_map = make_block_maps blocks in
+    let block_map = add_prev_next block_map label_map in
+      StringMap.fold (fun _ block list -> block :: list) block_map [] |> List.rev;;
+
+end;;
+
+open Blockifier;;
+
+module Core : sig
+
+  val absint_core:
+    block list -> 'state absint_pass -> int -> StringSet.t -> 'state * StringSet.t;;
+
+end = struct
+
+  (*
+
+    This is actually the abstract interpreter core. It needs the
+    following parameters:
+
+    * `blocks: block list` the list of blocks to run on;
+
+    * `state_converges: state -> state -> bool` the function that
+    decides if fixed point is reached; the parameters are the old
+    state, the new state; it returns true if the states converge, false
+    otherwise;
+
+    * `state_combine: state list -> state` the function used to decide
+    the state at the start of a block based on the state of previous
+    blocks.
+
+    * `state_update: state -> instruction -> state` the function ran on
+    every instruction to update the state in the current block.
+
+    At the end, the final state is the combined state (via
+    `state_combine`) of all final blocks (i.e. blocks without follow up
+    blocks).
+
+    The abstract interpreter core will run these functions on a set of
+    blocks.
+
+    An abstract interpreter pass is made up of a set of these
+    functions.
+
+  *)
+  let absint_core blocks pass max_iterations_per_block messages =
+    let blocks_state =
+      List.fold_left
+        (fun map block -> StringMap.add block.name (0, pass.empty_state) map)
+        StringMap.empty
+        blocks
+    in
+    let blocks_map = List.map (fun block -> (block.name, block)) blocks |> map_of_list in
+    let first_blocks = List.filter (fun block -> block.prev_blocks = []) blocks in
+    let final_blocks = List.filter (fun block -> block.next_blocks = []) blocks in
+    let add_end elms list = (elms @ (List.rev list)) |> List.rev in
+    let extract_state (count, state) = state in
+    let rec ac_iter queue blocks_state messages =
+      match queue with
+        | [] ->
+            let raw_final_blocks_states =
+              List.map
+                (fun block -> StringMap.find block.name blocks_state |> extract_state)
+                final_blocks
+            in
+            let final_blocks_states =
+              List.filter (fun st -> st <> pass.empty_state) raw_final_blocks_states
+            in
+              pass.state_combine_final final_blocks_states, messages
+        | hd :: tl ->
+            (* printf "Block: %s\n" hd.name; *)
+            let count, old_final_state = StringMap.find hd.name blocks_state in
+            let raw_parent_blocks_states =
+              List.map (fun name -> StringMap.find name blocks_state |> snd) hd.prev_blocks
+            in
+            let parent_blocks_states =
+              List.filter (fun st -> st <> pass.empty_state) raw_parent_blocks_states in
+            let start_state = pass.state_combine parent_blocks_states in
+            let new_final_state, new_messages =
+              List.fold_left pass.state_update (start_state, messages) hd.instructions
+            in
+            let process_children =
+              count < max_iterations_per_block
+              && not(pass.state_converges old_final_state new_final_state)
+            in
+            let new_blocks_state =
+              StringMap.add hd.name (count + 1, new_final_state) blocks_state
+            in
+              if process_children
+              then
+                let children_blocks =
+                  List.map (fun name -> StringMap.find name blocks_map) hd.next_blocks
+                in
+                let new_queue = add_end children_blocks tl in
+                  ac_iter new_queue new_blocks_state new_messages
+              else
+                ac_iter tl new_blocks_state new_messages
+    in
+      ac_iter first_blocks blocks_state messages;;
+end;;
+
+module Vi : sig
+
+  type var_value =
+    | Uninitialized
+    | Initialized
+
+  type env = var_value StringMap.t list;;
+
+  val pass: env absint_pass;;
+
+end = struct
+
+  (* 'Variable Initialized' (vi) pass. *)
+
+  (* This pass assumes that all blocks that precede a block have the
+     same environment depth at their end (state combiner assumption). *)
+  type var_value =
+    | Uninitialized
+    | Initialized
+
+  type env = var_value StringMap.t list;;
+
+  let combine_vals expr1 expr2 =
+    match (expr1, expr2) with
+      | Initialized, Initialized -> Initialized
+      | _ -> Uninitialized;;
+
+  (* Environment *)
+  let add_env_frame env = StringMap.empty :: env;;
+
+  let remove_env_frame env = List.tl env;;
+
+  let rec env_set_var var value env =
+    match env with
+      | var_map :: other_maps ->
+          if StringMap.mem var var_map
+          then (StringMap.add var value var_map) :: other_maps
+          else var_map :: (env_set_var var value other_maps)
+      | [] -> [];;
+
+  let declare_var var env =
+    match env with
+      | var_map :: tl ->
+          (StringMap.add var Uninitialized var_map) :: tl
+      | [] ->
+          (StringMap.empty |> StringMap.add var Uninitialized) :: [];;
+
+  let rec env_get_var var env =
+    match env with
+      | var_map :: other_maps ->
+          if StringMap.mem var var_map
+          then Some(StringMap.find var var_map)
+          else env_get_var var other_maps
+      | [] ->
+          None;;
+
+  let rec eval expr env messages =
+    match expr with
+      | Number _ -> Initialized, messages
+      | Add(expr1, expr2)
+      | Subtract(expr1, expr2)
+      | Mod(expr1, expr2)
+      | Multiply(expr1, expr2)
+      | Divide(expr1, expr2)
+      | LessThan(expr1, expr2)
+      | GreaterThan(expr1, expr2)
+      | Equal(expr1, expr2) ->
+          let val1, mess1 = eval expr1 env StringSet.empty in
+          let val2, mess2 = eval expr2 env StringSet.empty in
+          let new_messages = StringSet.union mess1 mess2 |> StringSet.union messages in
+            (combine_vals val1 val2, new_messages)
+      | Not(expr) ->
+          eval expr env messages
+      | Var var ->
+          match env_get_var var env with
+            | None ->
+                let message = sprintf "Variable '%s' is not declared." var in
+                  (Uninitialized, StringSet.add message messages)
+            | Some v ->
+                (match v with
+                   | Uninitialized ->
+                       let message = sprintf "Variable '%s' is not initialized." var in
+                         (Uninitialized, StringSet.add message messages)
+                   | Initialized ->
+                       (Initialized, messages))
+
+  (* Debugging *)
+  let listify_env env =
+    let dump_var_map var_map =
+      StringMap.fold
+        (fun key value bindings ->
+           let value_str = match value with
+             | Uninitialized -> "Uninitialized"
+             | Initialized -> "Initialized"
+           in
+             (sprintf "'%s' -> %s" key value_str) :: bindings)
+        var_map
+        []
+    in
+      List.rev env |> List.map dump_var_map;;
+
+  let show_env env =
+    listify_env env
+            |> List.concat
+            |> List.fold_left (fun str elm -> str ^ "\n" ^ elm) "";;
+
+  let vi_pass_empty_state = [];;
+
+  let vi_pass_state_update (env, messages) insn =
+    match insn with
+      | NewFrame ->
+          (add_env_frame env, messages)
+      | KillFrame ->
+          (remove_env_frame env, messages)
+
+      (* We don't need to do anything on GOTOs, since the code has
+         already been 'blockified'. *)
+      | Goto (_) ->
+          env, messages
+
+      (* We evaluate the condition in `GotoIf`, to trigger
+         warnings early. *)
+      | GotoIf (cond, _, _) ->
+          let _, new_messages = eval cond env messages in
+            (env, new_messages)
+
+      (* No need to act on labels either. In fact, GOTOs and Labels
+         could be removed when 'blockifying' the IR, to speed things
+         up. *)
+      | Label (_) ->
+          env, messages
+
+      | Assignment(var, expr) ->
+          (let value, new_messages = eval expr env messages in
+           let new_messages2 =
+             match env_get_var var env with
+               | Some _ -> new_messages
+               | None ->
+                   let message = sprintf "Variable '%s' is not declared." var in
+                     StringSet.add message new_messages
+           in
+             (env_set_var var value env, new_messages2))
+
+      | Declare(var) ->
+          (declare_var var env, messages)
+
+      (* A set of outputs should be added to the state? *)
+      | Output (_) ->
+          env, messages;;
+
+  let vi_pass_state_converges old_state new_state =
+    old_state = new_state;;
+
+  let vi_pass_state_combine_final states =
+    []
+
+  let vi_pass_state_combine states =
+    (* List.map show_state states |> String.concat "\n" |> print_endline; *)
+    let combine_2_maps map1 map2 =
+      StringMap.fold
+        (fun key value other_map ->
+           let combined_value =
+             if StringMap.mem key other_map
+             then combine_vals value (StringMap.find key other_map)
+             else value
+           in
+             StringMap.add key combined_value other_map)
+        map1
+        map2
+    in
     let combine_2_envs env1 env2 =
+      if List.length env1 <> List.length env2
+      then failwith "ABSINT: VI pass: environments not the same size";
       List.map2 combine_2_maps env1 env2
     in
-      List.fold_left combine_2_envs (List.hd envs) (List.tl envs)
-  in
-  let combine_states states =
-    let combine_two_states state1 state2 =
-      let env1, messages1 = state1 in
-      let env2, messages2 = state2 in
-      let env = combine_envs [env1; env2] in
-      let messages = messages1 @ messages2 in
-        (env, messages)
+    let result =
+      match states with
+        | [] -> vi_pass_empty_state
+        | hd :: tl ->
+            List.fold_left combine_2_envs hd tl
     in
-      List.fold_left combine_two_states (List.hd states) (List.tl states)
-  in
-    amb combine_states (const (Some ())) [m1; m2];;
+      (* show_state result |> print_endline; *)
+      result;;
 
-let set_var var value =
-  let rec env_set_var env var value =
-    match env with
-      | var_map :: other_maps ->
-          if VarMap.mem var var_map
-          then (VarMap.add var value var_map) :: other_maps
-          else var_map :: (env_set_var other_maps var value)
-      | [] -> []
-  in
-    get_state >>= fun (env, messages) ->
-      let new_env = env_set_var env var value in
-        set_state (new_env, messages);;
+  let pass = { empty_state = vi_pass_empty_state;
+               state_update = vi_pass_state_update;
+               state_converges = vi_pass_state_converges;
+               state_combine = vi_pass_state_combine;
+               state_combine_final = vi_pass_state_combine_final;
+             };;
 
-let declare_var var =
-  get_state >>= fun (env, messages) ->
-    let new_env =
-      match env with
-        | var_map :: tl ->
-            (VarMap.add var Uninitialized var_map) :: tl
-        | [] ->
-            (VarMap.empty |> VarMap.add var Uninitialized) :: []
-    in
-      set_state (new_env, messages);;
+end;;
 
-let get_var var =
-  let rec env_get_var env var =
-    match env with
-      | var_map :: other_maps ->
-          if VarMap.mem var var_map
-          then Some(VarMap.find var var_map)
-          else env_get_var other_maps var
-      | [] ->
-          None
-  in
-    get_state >>= fun (env, _) ->
-      result <| env_get_var env var;;
+let process ir_list =
+  let block_list = Blockifier.blockify ir_list in
+  let env, messages = Core.absint_core block_list Vi.pass 5 StringSet.empty in
+    StringSet.elements messages;;
 
-let add_env_frame =
-  get_state >>= fun (env, messages) ->
-    set_state (VarMap.empty :: env, messages);;
+let process2 = Blockifier.blockify;;
 
-let remove_env_frame =
-  get_state >>= fun (env, messages) ->
-    if List.length env > 1
-    then set_state (List.tl env, messages)
-    else result ();;
+let example_1 = [ NewFrame;
+                  Declare "N";
+                  Assignment("N", Number 137);
+                  Label "While";
+                  GotoIf(Not(GreaterThan(Var "N", Number 1)), "AfterWhile", "");
+                  GotoIf(Equal(Mod(Var"N", Number 2), Number 0), "ElseBranch", "");
+                  Assignment("N", Divide(Var "N", Number 2));
+                  Goto("AfterIf");
+                  Label("ElseBranch");
+                  Assignment("N", Add(Multiply(Number 3, Var "N"), Number 1));
+                  Label("AfterIf");
+                  Goto("While");
+                  Label("AfterWhile");
+                  KillFrame;
+                ];;
 
-(* Messages *)
+let example_2 = [ NewFrame;
+                  Declare "N";
+                  (* Assignment("N", Number 137); *)
+                  Label "While";
+                  GotoIf(Not(GreaterThan(Var "N", Number 1)), "AfterWhile", "");
+                  GotoIf(Equal(Mod(Var"N", Number 2), Number 0), "ElseBranch", "");
+                  Assignment("N", Divide(Var "N", Number 2));
+                  Goto("AfterIf");
+                  Label("ElseBranch");
+                  Assignment("N", Add(Multiply(Number 3, Var "N"), Number 1));
+                  Label("AfterIf");
+                  Goto("While");
+                  Label("AfterWhile");
+                  KillFrame;
+                ];;
 
-let add_message message =
-  update_state (fun (var_map, messages) -> (var_map, message :: messages));;
-
-let save_messages =
-  get_state >>= fun (var_map, messages) ->
-    set_state (var_map, [])
-    <+> (result messages);;
-
-let restore_messages messages =
-  get_state >>= fun (var_map, current_messages) ->
-    set_state (var_map, current_messages @ messages);;
-
-(* Debugging *)
-let show_env env =
-  let dump_var_map var_map =
-    VarMap.fold
-      (fun key value bindings ->
-         let value_str = match value with
-           | Uninitialized -> "Uninitialized"
-           | Unknown -> "Unknown"
-         in
-           (sprintf "'%s' -> %s" key value_str) :: bindings)
-      var_map
-      []
-  in
-    List.rev env |> List.map dump_var_map;;
-
-(* Abstract Interpreter *)
-let rec int_abs program =
-  match program with
-    | Seq statements ->
-        add_message "Seq"
-        <+> add_env_frame
-        <+> chain statements
-        <+> remove_env_frame
-    | Assignment(var, expr) ->
-        (add_message "Assignment"
-         <+> get_var var >>= fun value ->
-           (if (value = None)
-            then add_message (sprintf "Undeclared variable '%s'." var)
-            else result ())
-           <+> eval expr >>= fun value ->
-             set_var var value)
-    | Declare var ->
-        add_message <| sprintf "Declare '%s'." var
-          <+> declare_var var
-    | Nop ->
-        add_message "Nop"
-    | While(cond, body) ->
-        add_message "While"
-        <+> eval cond
-        <+> eval_alt body Nop
-    | If(cond, then_body, else_body) ->
-        (add_message "If"
-         <+> eval cond
-         <+> eval_alt then_body else_body)
-    | ConditionalGoto(_, _) | Goto(_) | Label(_) ->
-        failwith "Internal error -> remove goto statements before running absint."
-
-and eval_alt body1 body2 =
-  save_messages >>= fun current_messages ->
-    absint_amb (int_abs body1) (int_abs body2)
-    <+> restore_messages current_messages
-
-and eval expr =
-  match expr with
-    | Number _ -> result Unknown
-    | Sum(expr1, expr2)
-    | LessThan(expr1, expr2)
-    | Equal(expr1, expr2)  ->
-        (eval expr1 >>= fun val1 ->
-           eval expr2 >>= fun val2 ->
-             result (combine_vals val1 val2))
-    | Var var ->
-        get_var var >>= fun maybe_value ->
-          match maybe_value with
-            | Some value ->
-                (match value with
-                   | Uninitialized ->
-                       add_message (sprintf "Uninitialized variable '%s'." var)
-                       <+> result Uninitialized
-                   | Unknown ->
-                       result Unknown)
-            | None ->
-                add_message (sprintf "Undeclared variable '%s'." var)
-                <+> result Uninitialized
-
-and chain statements =
-  match statements with
-    | hd :: tl ->
-        int_abs hd <+> (chain tl)
-    | [] ->
-        result ();;
-
-let run program =
-  let absint_monad = int_abs program in
-  let (env, messages), _ = run_absint absint_monad ([], []) in
-    (show_env env, List.rev messages);;
-
-(* An element on the GOTO removal transformation stack is the list of
-   instructions already processed (in reverse order) and the list of
-   unprocessed instructions.
-
-   This stack is probably kin to the zipper data structures. *)
-type transform_stack = program list * program list;;
-
-let remove_goto program =
-  let rec remove_goto_impl stack =
-    match stack with
-      | (processed, unprocessed) :: tl ->
-          (match unprocessed with
-             | to_process :: others ->
-                 (match to_process with
-                    | Seq(stmts) ->
-                        let new_stack = ([], stmts) :: (processed, others) :: tl in
-                        let transformed_stmts, transformed_tl = remove_goto_impl new_stack in
-                        let new_seq = Seq transformed_stmts in
-                        let new_top = (new_seq :: processed, others) in
-                          remove_goto_impl (new_top :: transformed_tl)
-                    | If(cond, then_body, else_body) ->
-                        let then_stack = ([], [then_body]) :: (processed, others) :: tl in
-                        let tr_then_body, tr_tl_1 = remove_goto_impl then_stack in
-                        let else_stack =
-                          ([], [else_body]) :: (processed, others) :: tr_tl_1
-                        in
-                        let tr_else_body, tr_tl_2 = remove_goto_impl else_stack in
-                        let new_if = If(cond,
-                                        List.hd tr_then_body,
-                                        List.hd tr_else_body) in
-                        let new_top = (new_if :: processed, others) in
-                          remove_goto_impl (new_top :: tr_tl_2)
-                    | While(cond, body) ->
-                        let new_stack = ([], [body]) :: (processed, others) :: tl in
-                        let tr_body, tr_tl = remove_goto_impl new_stack in
-                        let new_while = While(cond, List.hd tr_body) in
-                        let new_top = (new_while :: processed, others) in
-                          remove_goto_impl (new_top :: tr_tl)
-                    | stmt ->
-                        let new_top = (stmt :: processed, others) in
-                          remove_goto_impl (new_top :: tl))
-             | [] ->
-                 List.rev processed, tl)
-      | [] ->
-          [], []
-  in
-  let processed, final_stack = remove_goto_impl [([], [program])] in
-    List.hd processed;;
-
-let program_1 = Seq [Declare "a";
-                       Declare "b";
-                       Assignment("a", Number 1);
-                       ConditionalGoto(Equal(Var "a", Number 1), "Gogu");
-                       Assignment("b", Number 1);
-                       Label "Gogu";
-                       Assignment("a", Number 2)];;

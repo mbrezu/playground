@@ -50,9 +50,12 @@
 ** TODO CREATE TYPE, objects
 ** DONE statement ignore (with warning)
 ** TODO add tests for broken inputs (errors should be sane)
-** TODO simple abstract interpreter
+** DONE simple abstract interpreter
    that traces 'executed' instructions on the console. Need it to
    figure out the abstract interpreter monad.
+** TODO Compiler
+   A translator from the parse tree to the intermediate representation
+   needed by the abstract interpreter.
 *** DONE figure out monad
 *** TODO extend monad to support nested scopes and goto
     test by enhancing the simple language that is used in absint.ml

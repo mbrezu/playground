@@ -13,23 +13,29 @@ def forceRun(cmd):
     set_force_build(False)
     if status: sys.exit(status)
 
-base_modules = ["parserTypes",
-                "utils",
-                "pwm",
-                "lexer",
-                "plsqlParser",
-                "absint"
-                ]
+base_modules = [
+    "parserTypes",
+    "utils",
+    "pwm",
+    "lexer",
+    "plsqlParser",
+    "absint",
+    "acm",
+    "absintCompiler",
+    "experimental_absint"
+]
 
-tests_modules = ["testsCommon",
-                 "lexerTests",
-                 "pwmTests",
-                 "exprTests",
-                 "selectTests",
-                 "stmtTests",
-                 "absintTests",
-                 "tests",
-                 ]
+tests_modules = [
+    "testsCommon",
+    "lexerTests",
+    "pwmTests",
+    "exprTests",
+    "selectTests",
+    "stmtTests",
+    "absintTests",
+    "absintCompilerTests",
+    "tests",
+]
 
 speed_modules = ["speed",
                  ]

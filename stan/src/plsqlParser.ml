@@ -461,8 +461,8 @@ struct
 
   and parse_select () =
     wrap_pos (consume "SELECT" <+> parse_select_fields () >>= fun fields ->
-                  parse_select_clauses [] >>= fun clauses ->
-                    result <| Select { fields = fields; clauses = clauses })
+                parse_select_clauses [] >>= fun clauses ->
+                  result <| Select { fields = fields; clauses = clauses })
 
   and parse_select_clauses clauses =
     let clause_parser p =

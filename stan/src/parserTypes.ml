@@ -1,4 +1,3 @@
-
 type pos = Pos of int * int;;
 
 type line_column = LineColumn of int * int;;
@@ -18,4 +17,3 @@ type ('a, 'b) parser = ParserM of ('a input -> (warning list) * ('a stream * 'b)
 let token_content (Token(content, _)) = content;;
 
 let token_pos (Token(_, pos)) = pos;;
-

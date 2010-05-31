@@ -7,6 +7,7 @@ let suite = "Parser tests" >::: [LexerTests.suite;
                                  SelectTests.suite;
                                  StmtTests.suite;
                                  AbsintTests.suite;
+                                 AbsintCompilerTests.suite;
                                 ]
 
 let _ =

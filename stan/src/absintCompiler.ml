@@ -61,6 +61,14 @@ let rec compile ast =
         let loop_label = gensym "BeforeLoop" in
         let exit_label = gensym "AfterLoop" in
           compile_loop loop_label exit_label stmts
+    | StmtWhile(expr, body), _ ->
+        let loop_label = gensym "BeforeWhile" in
+        let exit_label = gensym "AfterWhile" in
+          (match body with
+             | StmtLoop(stmts, _), _ ->
+                 compile_while loop_label exit_label expr stmts
+             | _ ->
+                 failwith "STAN internal error.")
     | StmtExitWhen(expr, maybe_label), _ ->
         (get_state >>= fun (labels, _, _) ->
            let next_insn = gensym "Next" in
@@ -75,6 +83,15 @@ let rec compile ast =
                    failwith "STAN internal error.")
     | _ ->
         failwith "Unknown ast type."
+
+and compile_while loop_label exit_label expr stmts =
+  push_labels [loop_label; exit_label]
+  <+> (add_ir <| Label loop_label)
+  (* <+> (add_ir <| GotoIf( *)
+  <+> (compile_stmt_list stmts)
+  <+> (add_ir <| Goto(loop_label, None))
+  <+> (add_ir <| Label exit_label)
+  <+> pop_labels ()
 
 and compile_loop loop_label exit_label stmts =
   push_labels [loop_label; exit_label]

@@ -283,6 +283,21 @@ END;"
      Label "UserLabel_OUTER_AfterLoop";
      DeleteFrame];;
 
+let test_compile_while () =
+  compile_test_helper
+    "
+DECLARE
+  N NUMBER(2);
+BEGIN
+  N := 1;
+  WHILE N <= 10
+  LOOP
+    DBMS_OUTPUT.PUT_LINE(N);
+    N := N + 1;
+  END LOOP;
+END;"
+    [];;
+
 let suite = "Absint tests" >::: [
   "test_compile_simple_program" >:: test_compile_simple_program;
   "test_compile_assignment" >:: test_compile_assignment;
@@ -293,4 +308,5 @@ let suite = "Absint tests" >::: [
   "test_compile_loop_exit" >:: test_compile_loop_exit;
   "test_compile_labeled_loop_exit" >:: test_compile_labeled_loop_exit;
   "test_compile_labeled_nested_loop_exit" >:: test_compile_labeled_nested_loop_exit;
+  (* "test_compile_while" >:: test_compile_while; *)
 ];;

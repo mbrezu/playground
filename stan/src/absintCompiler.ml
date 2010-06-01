@@ -25,6 +25,10 @@ end;;
 
 open Gensym;;
 
+let loop_label_user label = sprintf "UserLabel_%s_BeforeLoop" label;;
+
+let loop_exit_label_user label = sprintf "UserLabel_%s_AfterLoop" label;;
+
 let rec compile ast =
   match ast with
     | Program(stmts), _ ->
@@ -44,8 +48,41 @@ let rec compile ast =
         add_ir <| Absint.Ir.Call(subprogram, arguments)
     | StmtIf(cond, then_clause, else_clause), _ ->
         compile_if cond then_clause else_clause
+    | StmtLabeled(label, stmt), _ ->
+        (match stmt with
+           | StmtLoop(stmts, _), _ ->
+               let loop_label = loop_label_user label in
+               let exit_label = loop_exit_label_user label in
+                 compile_loop loop_label exit_label stmts
+           | stmt ->
+               (add_ir <| Label ("UserLabel_" ^ label))
+               <+> compile stmt)
+    | StmtLoop(stmts, _), _ ->
+        let loop_label = gensym "BeforeLoop" in
+        let exit_label = gensym "AfterLoop" in
+          compile_loop loop_label exit_label stmts
+    | StmtExitWhen(expr, maybe_label), _ ->
+        (get_state >>= fun (labels, _, _) ->
+           let next_insn = gensym "Next" in
+             match (labels, maybe_label) with
+               | _, Some label ->
+                   (add_ir <| GotoIf(expr, loop_exit_label_user label, next_insn))
+                   <+> (add_ir <| Label next_insn)
+               | [_; after] :: _, _ ->
+                   (add_ir <| GotoIf(expr, after, next_insn))
+                   <+> (add_ir <| Label next_insn)
+               | _ ->
+                   failwith "STAN internal error.")
     | _ ->
         failwith "Unknown ast type."
+
+and compile_loop loop_label exit_label stmts =
+  push_labels [loop_label; exit_label]
+  <+> (add_ir <| Label loop_label)
+  <+> (compile_stmt_list stmts)
+  <+> (add_ir <| Goto(loop_label, None))
+  <+> (add_ir <| Label exit_label)
+  <+> pop_labels ()
 
 and compile_if cond then_clause else_clause =
   let then_label = gensym "Then" in

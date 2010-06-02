@@ -14,4 +14,3 @@ This is a repository for various small projects.
 5. `synpl-parser` - an exercise in building simple parsers in Clojure;
 6. `timetable` - a Clojure timetabling program (mostly abandoned);
 7. `toycc` - a toy C compiler (abandoned);
-8. `stan` - a PL/SQL static code analyzer (just started).
